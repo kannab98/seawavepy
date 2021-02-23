@@ -1,29 +1,16 @@
+from . import CONFIG
 from json import load
 import logging
-import sys, os
-
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-fh = logging.FileHandler('modeling.log')
-fh.setFormatter(formatter)
-logger.addHandler(fh)
-
-sh = logging.StreamHandler(sys.stdout)
-sh.setFormatter(formatter)
-logger.addHandler(sh)
-
-logger.debug('Welcome to project repo: https://github.com/kannab98/seawavepy')
 
 class rcParams():
+    logger.info('Load config  from %s' % CONFIG)
+    with open(CONFIG) as f:
+        __rc__ = load(f)
 
-    def __init__(self, file="rc.json"):
-        self.__json2object__(file)
-        if file == "rc.json":
-            logger.info('Load default config')
-        else:
-            logger.info('Reload config from %s' % file)
+    def __init__(self, **kwargs):
+        self.__json2object__("rc.json")
 
 
     def __json2object__(self, file):
@@ -57,7 +44,3 @@ class rcParams():
             # setattr(attr, "call", {})
             for key, value in Value.items():
                 setattr(attr, key, value[0])
-
-rc = rcParams()
-
-

@@ -3,7 +3,7 @@ import os.path
 import json
 import pandas as pd
 import logging
-import modeling.cuda
+from . import cuda
 from . import rc
 from .spectrum import spectrum
 from .surface import surface
@@ -26,6 +26,7 @@ except:
 band = np.array(["C", "X", "Ku", "Ka"])
 
 TPB=16
+
 
 def init(kernel, arr, X, Y, host_constants):
     cuda_constants = tuple(cuda.to_device(host_constants[i]) for i in range(len(host_constants)))
@@ -67,7 +68,7 @@ def init(kernel, arr, X, Y, host_constants):
     return arr, X, Y
 
 def simple_launch(kernel):
-    logger.info("Use %s kernel" % kernel.__dict__['py_func'].__name__)
+    logger.debug("Use %s kernel" % kernel.__dict__['py_func'].__name__)
 
     model_coeffs = surface.export()
 
@@ -82,27 +83,27 @@ def simple_launch(kernel):
 
     size = rc.surface.gridSize
 
-    var0 = spectrum.quad(0, 0)
-    var0_s = spectrum.quad(2, 0)
+    # var0 = spectrum.quad(0, 0)
+    # var0_s = spectrum.quad(2, 0)
 
-    var = np.var(arr[0])
-    var_s = np.var(arr[1]+arr[2])
+    # var = np.var(arr[0])
+    # var_s = np.var(arr[1]+arr[2])
 
-    logger.info('Practice variance of heights sigma^2_h=%.6f' % var)
-    logger.info('Practice variance of heights sigma^2=%.6f' % var_s)
+    # logger.info('Practice variance of heights sigma^2_h=%.6f' % var)
+    # logger.info('Practice variance of heights sigma^2=%.6f' % var_s)
 
-    if 0.5*var0 <= var <= 1.5*var0:
-        logger.info("Practice variance of heights sigma^2_h matches with theory")
-    else:
-        logger.warning("Practice variance of heights sigma^2_h not matches with theory")
+    # if 0.5*var0 <= var <= 1.5*var0:
+    #     logger.info("Practice variance of heights sigma^2_h matches with theory")
+    # else:
+    #     logger.warning("Practice variance of heights sigma^2_h not matches with theory")
 
-    if 0.5*var0_s <= var_s <= 1.5*var0_s:
-        logger.info("Practice variance of full slopes sigma^2 matches with theory")
-    else:
-        logger.warning("Practice variance of full slopes sigma^2 not matches with theory")
+    # if 0.5*var0_s <= var_s <= 1.5*var0_s:
+    #     logger.info("Practice variance of full slopes sigma^2 matches with theory")
+    # else:
+    #     logger.warning("Practice variance of full slopes sigma^2 not matches with theory")
 
 
-    labels = ['elev', 'sx', 'sy', 'vz', 'vx', 'vy']
+    labels = ['z', 'sx', 'sy', 'vz', 'vx', 'vy']
 
     df = pd.DataFrame({label: arr[i] for i, label in enumerate(labels)})
     return df
@@ -117,14 +118,12 @@ def simple_launch(kernel):
 
 
 
-
 def __kernel_per_band__(kernel, X, Y, model_coeffs):
-
+    logger.info("Use %s kernel" % kernel.__dict__['py_func'].__name__)
 
     k = np.abs(model_coeffs[0][:, 0])
     N = spectrum.KT.size - 1
 
-    print(spectrum.KT)
     process = [ None for i in range(N)]
     arr = [ None for i in range(N)]
 
@@ -183,9 +182,9 @@ def convert_to_band(arr, band):
 
     elif isinstance(band, int):
         ind = band
-    print(ind)
+
     srf = np.sum(arr[:ind], axis=0)
-    labels = ['elev', 'sx', 'sy', 'vz', 'vx', 'vy']
+    labels = ['z', 'sx', 'sy', 'vz', 'vx', 'vy']
 
     df = pd.DataFrame({label: srf[i] for i, label in enumerate(labels)})
 

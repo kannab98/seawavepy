@@ -1,4 +1,4 @@
 from . import retracking
-from modeling import rc
+from .. import rc
 
 retracking = retracking.__retracking__()

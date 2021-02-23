@@ -1,11 +1,15 @@
 
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
 
 from ..surface import surface
-from .. import rc
-from ..__decorators__ import ufunc
+from .. import rc, kernel, cuda
 
+from numba import njit, prange
+import pandas as pd
+
+logger = logging.getLogger(__name__)
 class __radar__():
 
     def dispatcher(func):
@@ -32,16 +36,16 @@ class __radar__():
         return wrapper
 
     def geometryUpdate(self):
-        self._r = surface.coordinates
-        self._R = self.position(surface.coordinates, self.sattelite_coordinates)
-
+        logger.info('Init radar with position %s' % str(self.sattelite_coordinates))
+        logger.info('Transmitter params: gain_width=%.1f, wave length=%s' % (rc.antenna.gainWidth, str(rc.antenna.waveLength)) )
+        self._R[:] = self.position(surface.coordinates, self.sattelite_coordinates)
+        # Смещение координаты x!
         offset = rc.antenna.z*np.arctan(np.deg2rad(rc.antenna.deviation))
         R0 = np.array([offset, 0, 0])[None].T*np.ones((1,self._R.shape[-1]))
-        # print(self._R[:,0])
+
         self._R += R0
-        # print(self._R[:,0])
-        self._n = surface.normal
-        self._nabs = self.abs(self._n)
+        self._n[:] = surface.normal
+        self._n[:] = self._n/self.abs(self._n)
         self._Rabs = self.abs(self._R)
 
 
@@ -49,10 +53,25 @@ class __radar__():
 
     def __init__(self):
 
-        self._r = None
-        self._R = None
-        self._n = None
-        self._nabs = None
+        labels = ['x', 'y', 'z', 'nx', 'ny', 'nz']
+        srf = np.zeros((len(labels), np.prod(rc.surface.gridSize)))
+        self._data = pd.DataFrame(srf.T, columns=labels)
+
+
+        self._R = np.array([
+            np.frombuffer(self._data.x.values),
+            np.frombuffer(self._data.y.values),
+            np.frombuffer(self._data.z.values),
+        ], dtype="object")
+
+        self._n = np.array([
+            np.frombuffer(self._data.nx.values),
+            np.frombuffer(self._data.ny.values),
+            np.frombuffer(self._data.nz.values),
+        ], dtype="object")
+
+
+
         self._Rabs = None
 
         self.geometryUpdate()
@@ -138,7 +157,7 @@ class __radar__():
         rc.antenna.deviation = xi
         self.geometryUpdate()
         R = np.array(self._R/self._Rabs, dtype=float)
-        n = np.array(self._n/self._nabs, dtype=float)
+        n = np.array(self._n, dtype=float)
 
 
 
@@ -148,7 +167,7 @@ class __radar__():
 
         # Матрица поворта вокруг X
         # Mx = self.rotatex(np.pi/2)
-        My = self.rotatey(np.pi/2)
+        # My = self.rotatey(np.pi/2)
         # taux = np.einsum('ij, jk -> ik', My, n)
         # tauy = np.einsum('ij, jk -> ik', Mx, n)
 
@@ -217,31 +236,121 @@ class __radar__():
     #     size = self.surface.gridSize
     #     return self._R[2].reshape((size, size))
     
+
+    # def power0(self, t):
+    #     self.geometryUpdate()
+    #     tau = self._Rabs / rc.constants.lightSpeed
+    #     timp = rc.antenna.impulseDuration
+    #     G = self.gain(self.incidence, rc.antenna.deviation)
+    #     theta0 = self.localIncidence(xi=rc.antenna.deviation)
+
+    #     index_time = np.where( (0 <= t - tau) & (t - tau <= timp) )
+    #     # print(index_time)
+
+    #     theta0 = theta0[index_time]
+    #     # theta = self.incidence[index_time]
+
+    #     Rabs = self._Rabs[index_time]
+
+    #     # R = self._R[:,index_time[0]]
+    #     G = G[:,index_time[0]]
+
+
+
+    #     index_space = np.where(theta0 < np.deg2rad(1))
+
+    #     # theta = self.incidence[index_space]
+    #     Rabs = Rabs[index_space]
+
+    #     # R = self._R[:,index_space[0]]
+    #     G = G[:,index_space[0]]
+
+
+
+
+    #     # print(G, Rabs)
+    #     E0 = (G/Rabs)**2
+    #     P = np.sum(E0**2/2)
+    #     return P
+        
+
+    # def power(self, t):
+
+    #     t = t[np.newaxis].T
+    #     self.geometryUpdate()
+    #     tau = self._Rabs / rc.constants.lightSpeed
+    #     timp = rc.antenna.impulseDuration
+
+    #     G = self.gain(self.incidence, rc.antenna.deviation)
+    #     theta0 = self.localIncidence(xi=rc.antenna.deviation)
+
+
+
+    #     mask = (0 <= t - tau) & (t - tau <= timp) & (theta0 <= np.deg2rad(1))
+
+    #     Rabs = self._Rabs[np.newaxis].repeat(t.size, axis=0)
+
+
+
+    #     G = G.flatten()[np.newaxis].repeat(t.size, axis=1).reshape((1, tau.size, t.size))
+    #     G = G.transpose(0, 2, 1)
+    #     G = G[0]
+
+    #     G = G[mask]
+    #     Rabs = Rabs[mask]
+    #     E0 = np.power(G/Rabs, 2)
+    #     P = np.sum(E0**2/2, axis=1)
+    #     return P
+    
     def power(self, t):
-        tau = self._Rabs / rc.constants.lightSpeed
+
+
+        self.geometryUpdate()
+        c =  rc.constants.lightSpeed
         timp = rc.antenna.impulseDuration
-        print(tau)
-        index = [ i for i in range(tau.size) if 0 <= t - tau[i] <= timp ]
-        # index = np.where((0 <= t) & ())
-        print(index)
-
-
-        theta = self.incidence[index]
-        Rabs = self._Rabs[index]
-        R = self._R[:,index]
-
+        G = self.gain(self.incidence, rc.antenna.deviation)
         theta0 = self.localIncidence(xi=rc.antenna.deviation)
-        index = self.sort(theta0, xi=rc.antenna.deviation)
-        theta = theta[index]
-        Rabs = Rabs[index]
-        R = R[:,index]
+        Rabs = self._Rabs
 
+        P = power_vec(t, Rabs, G, theta0, timp, c)
 
-        G = self.gain
-
-        E0 = (G/Rabs)**2
-        P = np.sum(E0**2/2)
         return P
+
+    def create_multiple_pulses(self, t, N, dump=False):
+        P = 0
+        data = np.zeros((t.size, N+1), dtype=float)
+
+        for i in range(N):
+            srf = kernel.simple_launch(cuda.default)
+            surface.data = srf
+            Pn = self.power(t)
+            data[:, i] = Pn
+            P += Pn
+        
+        data[:, -1] = P/N
+        data[:, -1] += 1e-1*data[:, -1].max()*np.random.rand(data[:, -1].size)
+
+        if dump:
+            with pd.ExcelWriter('impulses.xlsx', engine="xlsxwriter") as writer:
+                for i in range(N):
+                    df = pd.DataFrame({'t': t, 'P': data[:, i] })
+                    df.to_excel(writer, sheet_name='impulse%d' % i)
+                
+                df = pd.DataFrame({'t': t, 'P': data[:, -1]})
+                df.to_excel(writer, sheet_name='impulse_mean')
+
+                dt = {}
+                for Key, Value in vars(rc).items():
+                    # if type(Value) ==  type(rc.surface):
+                    dt.update({Key: {}})
+                    for key, value in Value.__dict__.items():
+                        if key[0] != "_":
+                            dt[Key].update({key: value})
+
+                df = pd.DataFrame(dt)
+                df.to_excel(writer, sheet_name='config')
+
+        return data[:, -1]
 
     def crossSection(self, theta):
         # Эти штуки не зависят от ДН антенны, только от геометрии
@@ -271,3 +380,13 @@ class __radar__():
         return N
 
     
+
+@njit(parallel=True)
+def power_vec(t, Rabs, G, theta0, timp, c):
+    P = np.zeros(t.size)
+    tau = Rabs / c
+    for i in prange(t.size):
+        mask = (0 <= t[i] - tau) & (t[i] - tau <= timp) & (theta0 <= np.deg2rad(1))
+        E0 = (G[:,mask]/Rabs[mask])**2
+        P[i] = np.sum(E0**2/2)
+    return P

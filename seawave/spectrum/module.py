@@ -5,6 +5,7 @@ import numpy as np
 import math as m
 from scipy import fft, interpolate, optimize, integrate
 from scipy.special import erf
+from numba import vectorize, float64
 
 from ..__decorators__ import spectrum_dispatcher as dispatcher
 from ..__decorators__ import ufunc
@@ -159,13 +160,13 @@ class __spectrum__(object):
         # интеграла по спектру и экспериментальной формулы для дисперсии
         # Интеграл по спектру наклонов
 
-        Func = lambda k_bound: self.quad(2, 0, 0, k_bound, epsabs=1.49e-6, radar_dispatcher=False) - var(rc.wind.speed)
+        Func = lambda k_bound: self.quad(2, 0, 0, k_bound, epsabs=1.49e-6, ) - var(rc.wind.speed)
         # Поиск граничного числа 
         # (Ищу ноль функции \integral S(k) k^2 dk = var(U10) )
         opt = optimize.root_scalar(Func, bracket=[0, 2000]).root
 
         # Значение кривизны 
-        curv0 = self.quad(4,0,0,opt, radar_dispatcher=False)
+        curv0 = self.quad(4,0,0,opt, )
 
         # Критерий выбора волнового числа
         # eps = np.power(KuWaveLength/(2*np.pi) * np.sqrt(curv0), 1/3)
@@ -175,7 +176,7 @@ class __spectrum__(object):
     
     def __find_k_bound(self, radarWaveLength):
         eps = self.curv_criteria()
-        Func = lambda k_bound: np.power( radarWaveLength/(2*np.pi) * np.sqrt(self.quad(4,0,0,k_bound, epsabs=1e-4, radar_dispatcher=False)), 1/3 ) - eps
+        Func = lambda k_bound: np.power( radarWaveLength/(2*np.pi) * np.sqrt(self.quad(4,0,0,k_bound, epsabs=1e-4, )), 1/3 ) - eps
         # root = optimize.root_scalar(Func, bracket=[self.KT[0], self.KT[-1]]).root
         root = optimize.root_scalar(Func, bracket=[0, 2000]).root
         return root
@@ -319,9 +320,10 @@ class __spectrum__(object):
         # Функция углового распределения
         km = self.peak
 
+
+        phi = np.angle(np.exp(1j*phi))
         phi -= np.deg2rad(rc.wind.direction)
-        index = np.where(np.abs(phi) > np.pi)
-        phi[index] = np.sign(phi[index])*(2*np.pi - np.abs(phi[index]))
+        phi = np.angle(np.exp(1j*phi))
 
 
         B0 = np.power(10, self.__az_exp_arg__(k, km))
@@ -336,26 +338,8 @@ class __spectrum__(object):
 
 
     @dispatcher()
-    @ufunc(2, 1)
     def JONSWAP(self, k):
-        if k == 0:
-            return 0
-
-        if k >= self.k_m:
-            sigma = 0.09
-        else:
-            sigma = 0.07
-
-
-        Sw = (self._alpha/2 *
-              m.pow(k, -3) * 
-              m.exp(-1.25 * m.pow(self.k_m/k, 2)) *
-              m.pow(self._gamma,
-                       m.exp(- (m.sqrt(k/self.k_m) - 1)**2 / (2*sigma**2))
-                    )
-              )
-        return Sw
-
+        return JONSWAP_vec(k, self.peak, self._alpha, self._gamma)
 
     # Безразмерный коэффициент Gamma
     @staticmethod
@@ -690,3 +674,24 @@ class __spectrum__(object):
         return spectrum
 
 
+
+args = [float64 for i in range(4)]
+@vectorize([float64(*args)])
+def JONSWAP_vec(k, km, alpha, gamma):
+    if k == 0:
+        return 0
+
+    if k >= km:
+        sigma = 0.09
+    else:
+        sigma = 0.07
+
+
+    Sw = (alpha/2 *
+            np.power(k, -3) * 
+            np.exp(-1.25 * np.power(km/k, 2)) *
+            np.power(gamma,
+                    np.exp(- (np.sqrt(k/km) - 1)**2 / (2*sigma**2))
+                )
+            )
+    return Sw

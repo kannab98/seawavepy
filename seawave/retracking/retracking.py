@@ -8,10 +8,13 @@ from numpy import pi
 from scipy.optimize import curve_fit
 from scipy.special import erf
 from pandas import read_csv
-from modeling import rc #, spectrum, surface
+
 import numpy
 
+from  .. import rc #, spectrum, surface
 
+import logging
+logger = logging.getLogger(__name__)
 class __retracking__():
     """
     Самый простой способ использовать этот класс, после вызова его конструктора
@@ -158,7 +161,7 @@ class __retracking__():
 
     
     @staticmethod
-    def ice(t, A,alpha,tau,sigma_l,T):
+    def ice(t, A,alpha, tau, sigma_l,T):
         """
         Точная аппроксимация формулы Брауна.
         В отличии от Брауна не привязяна к абсолютному времени. 
@@ -168,8 +171,20 @@ class __retracking__():
         return A * np.exp( -alpha * (t-tau) ) * (1 + erf( (t-tau)/sigma_l ) ) + T
 
     def pulse(self, t, pulse, func=None):
-        alpha = self.leading_edge(t, pulse, dtype="needed")
-        A, tau, sigma_l, b = self.trailing_edge(t, pulse)
+
+        logger.debug('Start retracking')
+        try:
+            alpha = self.leading_edge(t, pulse, dtype="needed")
+        except:
+            alpha = 1
+        
+        try:
+            A, tau, sigma_l, b = self.trailing_edge(t, pulse)
+        except:
+            A = 1
+            tau = 1
+            sigma_l = 1
+            b = 0
 
         popt = curve_fit(self.ice, 
                             xdata=t,
@@ -177,9 +192,9 @@ class __retracking__():
                             p0=[A, alpha, tau, sigma_l, b],
                             # bounds = [0, np.inf]
                         )[0]
+        logger.info('Restore pulse parameters: h=%.4f, Hs=%.4f' % (self.height(popt[2]), self.swh(popt[3]) ))
         return popt 
 
-    # def karaev(self, t, pulse):
     #     h = rc.antenna.z
     #     A = lambda var: 1/(2*var*h**2) + 5.52/(rc.antenna.beamWidth)
     #     F1 = 
