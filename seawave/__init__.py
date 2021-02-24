@@ -18,12 +18,25 @@ logger.debug('Welcome to project repo: https://github.com/kannab98/seawavepy')
 
 class rcParams():
 
-    def __init__(self, file="rc.json"):
+    def __init__(self, file=None):
+
+
+
+        defaultrc = os.path.join(os.path.dirname(__file__), 'rc.json')
+        cwdrc = os.path.join(os.getcwd(), 'rc.json')
+
+        if file != None and os.path.isfile(file):
+            logger.info('Load config from %s' % file)
+
+        elif os.path.isfile(cwdrc):
+            logger.info('Load config from cwd')
+            file = cwdrc
+
+        elif os.path.isfile(defaultrc):
+            logger.info('Load default config ')
+            file = defaultrc
+
         self.__json2object__(file)
-        if file == "rc.json":
-            logger.info('Load default config')
-        else:
-            logger.info('Reload config from %s' % file)
 
 
     def __json2object__(self, file):

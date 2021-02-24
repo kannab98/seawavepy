@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="seawavepy",
-    version="0.2.0",
+    version="0.2.1a",
     author="Kirill Ponur",
     author_email="ponur@ipfran.ru",
     description="",
