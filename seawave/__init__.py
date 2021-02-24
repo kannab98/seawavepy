@@ -25,8 +25,9 @@ class rcParams():
         defaultrc = os.path.join(os.path.dirname(__file__), 'rc.json')
         cwdrc = os.path.join(os.getcwd(), 'rc.json')
 
-        if file != None and os.path.isfile(file):
-            logger.info('Load config from %s' % file)
+        if file != None:
+            if os.path.isfile(file):
+                logger.info('Load config from %s' % file)
 
         elif os.path.isfile(cwdrc):
             logger.info('Load config from cwd')
@@ -36,10 +37,12 @@ class rcParams():
             logger.info('Load default config ')
             file = defaultrc
 
+        print(file, cwdrc, defaultrc)
         self.__json2object__(file)
 
 
     def __json2object__(self, file):
+
 
 #     """
 #     Преобразование полей конфигурационного файла rc.json 
