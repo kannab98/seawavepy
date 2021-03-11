@@ -37,7 +37,6 @@ class rcParams():
             logger.info('Load default config ')
             file = defaultrc
 
-        print(file, cwdrc, defaultrc)
         self.__json2object__(file)
 
 

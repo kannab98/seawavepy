@@ -73,49 +73,21 @@ class dispersion:
 """
 class __spectrum__(object):
 
-    # def dispatcher():
-    #     def decorator(func):
-    #         """
-    #         Декоратор обновляет необходимые переменные при изменении
-    #         разгона или скорости ветра
-    #         """
-    #         def wrapper(*args, dispatcher=True, radar_dispatcher=True, **kwargs):
-    #             self = args[0]
-    #             if dispatcher:
-    #                 x = rc.surface.nonDimWindFetch
-    #                 U = rc.wind.speed
-    #                 band = rc.surface.band
-    #                 waveLength = rc.antenna.waveLength
-
-    #                 if self._x != x or self._U != U or self._band != band or self.peak == None or \
-    #                 (self._wavelength != waveLength and radar_dispatcher):
-    #                     self.peakUpdate(radar_dispatcher)
-
-    #                 self._x, self._U = x, U
-    #                 self._wavelength = rc.antenna.waveLength
-
-    #             return func(*args, **kwargs)
-    #         return wrapper
-    #     return decorator
-
-
-
-
-
-
-
-
     def __init__(self):
         self._x = rc.surface.nonDimWindFetch
         self._U = rc.wind.speed
         self._band = rc.surface.band
         self._wavelength = rc.antenna.waveLength
+        self.k_m = None
         self.peak = None
         self.KT = np.array([1.49e-2, 2000])
         self.k = np.logspace( np.log10(self.KT.min()), np.log10(self.KT.max()), 10**3+1)
 
         # self.peakUpdate(True)
 
+    @property
+    def bounds(self):
+        return self.KT
 
     @dispatcher()
     def __call__(self, k, phi=None):
@@ -143,6 +115,7 @@ class __spectrum__(object):
 
 
     def curv_criteria(self, band='Ku'):
+        speckwargs = dict(radar_dispatcher=False)
         # Сейчас попробуем посчитать граничное волновое число фактически из экспериментальных данных
         # Из работы Панфиловой известно, что полная дисперсия наклонов в Ku-диапазоне задается формулой
 
@@ -160,7 +133,8 @@ class __spectrum__(object):
         # интеграла по спектру и экспериментальной формулы для дисперсии
         # Интеграл по спектру наклонов
 
-        Func = lambda k_bound: self.quad(2, 0, 0, k_bound, epsabs=1.49e-6, ) - var(rc.wind.speed)
+
+        Func = lambda k_bound: self.quad(2, 0, 0, k_bound,  speckwargs=speckwargs, epsabs=1.49e-6, ) - var(rc.wind.speed)
         # Поиск граничного числа 
         # (Ищу ноль функции \integral S(k) k^2 dk = var(U10) )
         opt = optimize.root_scalar(Func, bracket=[0, 2000]).root
@@ -174,15 +148,17 @@ class __spectrum__(object):
 
         return eps
     
-    def __find_k_bound(self, radarWaveLength):
+    def __find_k_bound(self, radarWaveLength,  **kwargs):
+        speckwargs = dict(radar_dispatcher=False)
         eps = self.curv_criteria()
-        Func = lambda k_bound: np.power( radarWaveLength/(2*np.pi) * np.sqrt(self.quad(4,0,0,k_bound, epsabs=1e-4, )), 1/3 ) - eps
+        Func = lambda k_bound: np.power( radarWaveLength/(2*np.pi) * np.sqrt(self.quad(4,0,0, k_bound, speckwargs=speckwargs, epsabs=1e-4, )), 1/3 ) - eps
         # root = optimize.root_scalar(Func, bracket=[self.KT[0], self.KT[-1]]).root
         root = optimize.root_scalar(Func, bracket=[0, 2000]).root
         return root
 
 
-    def kEdges(self, band):
+    @dispatcher()
+    def kEdges(self, band, ):
 
         """
         Границы различных электромагнитных диапазонов согласно спецификации IEEE
@@ -195,8 +171,14 @@ class __spectrum__(object):
 
         """
         bands = {"C":1, "X":2, "Ku":3, "Ka":4}
+
+
+        # if self.k_m == None:
+        #     self.__call__dispatcher__(radar_dispatcher=False)
+
+        k_m = self.k_m
+
         if isinstance(band, str):
-            k_m = self.k_m
             bands_edges = [
 
                 lambda k_m: k_m/4,
@@ -228,11 +210,11 @@ class __spectrum__(object):
             ]
             edges = np.array([ bands_edges[i](k_m) for i in range(bands[band]+1)])
         else:
-            k_m = self.k_m
+
             edges = np.zeros(len(band)+1)
             edges[0] = k_m/4
             for i in range(1, len(edges)):
-               edges[i] = self.__find_k_bound(band[i-1])
+               edges[i] = self.__find_k_bound(band[i-1], )
 
         # edges = np.array([ bands_edges[i](k_m) for i in range(bands[band]+1)])
         return edges
@@ -279,11 +261,13 @@ class __spectrum__(object):
         del __limit_k, limit
 
         # массив с границами моделируемого спектра.
-        # self.KT = self.kEdges(self.k_m, rc.surface.band)
-
         if rc.antenna.waveLength != None and radar_dispatcher:
             logger.info('Calculate bounds of modeling for radar wave lenghts: %s' %  str(rc.antenna.waveLength) )
             self.KT = self.kEdges(rc.antenna.waveLength)
+
+        elif radar_dispatcher == False:
+            self.KT = np.array([0, np.inf])
+
         else: 
             self.KT = self.kEdges(rc.surface.band)
         
@@ -337,7 +321,6 @@ class __spectrum__(object):
 
 
 
-    @dispatcher()
     def JONSWAP(self, k):
         return JONSWAP_vec(k, self.peak, self._alpha, self._gamma)
 
@@ -404,7 +387,7 @@ class __spectrum__(object):
             omega0 = dispersion.omega(k)
             return beta0 * np.power(omega0, -power[n-1]) * dispersion.det(k)
     
-    def quad(self, a,b, k0=None, k1=None, **quadkwargs):
+    def quad(self, a,b, k0=None, k1=None,  speckwargs=dict(), **quadkwargs):
     # def quad(*args, **kwargs):
         if k0==None:
             k0 = self.KT[0]
@@ -412,14 +395,14 @@ class __spectrum__(object):
         if k1==None:
             k1 = self.KT[-1]
 
-        S = lambda k: self.__call__(k) * k**a * dispersion.omega(k)**b
+        S = lambda k: self.__call__(k, **speckwargs) * k**a * dispersion.omega(k)**b
         var = integrate.quad(S, k0, k1, **quadkwargs)[0]
 
         return var
         # return specquad(*args, **kwargs)
 
 
-    def dblquad(self, a, b, c, k0=None, k1=None, phi0=None, phi1=None, **quadkwargs):
+    def dblquad(self, a, b, c, k0=None, k1=None, phi0=None, phi1=None,  speckwargs=dict(), **quadkwargs):
         limit = np.array([self.KT[0], *self.limit_k, self.KT[-1]])
 
         if k0==None:
@@ -435,7 +418,7 @@ class __spectrum__(object):
             phi1 = np.pi
         
 
-        S = lambda phi, k:  self.__call__(k, phi) *  k**(a+b-c) * np.cos(phi)**a * np.sin(phi)**b
+        S = lambda phi, k:  self.__call__(k, phi, **speckwargs) *  k**(a+b-c) * np.cos(phi)**a * np.sin(phi)**b
         var = integrate.dblquad( S,
                 a=k0, b=k1,
                 gfun=lambda phi: phi0, 
