@@ -5,5 +5,5 @@ import unittest
 from seawave.retracking import retracking
 
 
-df0, df = retracking.from_file('impulses/.*.txt')
-print(df)
+df0, df = retracking.from_file('tests/impulses/.*.txt')
+# print(df0)
