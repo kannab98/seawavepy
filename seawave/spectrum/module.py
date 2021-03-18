@@ -134,16 +134,16 @@ class __spectrum__(object):
         # Интеграл по спектру наклонов
 
 
-        Func = lambda k_bound: self.quad(2, 0, 0, k_bound,  speckwargs=speckwargs, epsabs=1.49e-6, ) - var(rc.wind.speed)
+        epsabs = 1.49e-6
+        Func = lambda k_bound: self.quad(2, 0, 0, k_bound,  speckwargs=speckwargs, epsabs=epsabs, ) - var(rc.wind.speed)
         # Поиск граничного числа 
         # (Ищу ноль функции \integral S(k) k^2 dk = var(U10) )
         opt = optimize.root_scalar(Func, bracket=[0, 2000]).root
 
         # Значение кривизны 
-        curv0 = self.quad(4,0,0,opt, )
+        curv0 = self.quad(4,0,0,opt, epsabs=epsabs)
 
         # Критерий выбора волнового числа
-        # eps = np.power(KuWaveLength/(2*np.pi) * np.sqrt(curv0), 1/3)
         eps = np.power(radarWaveLength/(2*np.pi) * np.sqrt(curv0), 1/3)
 
         return eps
@@ -151,7 +151,7 @@ class __spectrum__(object):
     def __find_k_bound(self, radarWaveLength,  **kwargs):
         speckwargs = dict(radar_dispatcher=False)
         eps = self.curv_criteria()
-        Func = lambda k_bound: np.power( radarWaveLength/(2*np.pi) * np.sqrt(self.quad(4,0,0, k_bound, speckwargs=speckwargs, epsabs=1e-4, )), 1/3 ) - eps
+        Func = lambda k_bound: np.power( radarWaveLength/(2*np.pi) * np.sqrt(self.quad(4,0,0, k_bound, speckwargs=speckwargs, epsabs=1.49e-6, )), 1/3 ) - eps
         # root = optimize.root_scalar(Func, bracket=[self.KT[0], self.KT[-1]]).root
         root = optimize.root_scalar(Func, bracket=[0, 2000]).root
         return root
@@ -214,7 +214,10 @@ class __spectrum__(object):
             edges = np.zeros(len(band)+1)
             edges[0] = k_m/4
             for i in range(1, len(edges)):
-               edges[i] = self.__find_k_bound(band[i-1], )
+                if band[i-1] == 0:
+                    edges[i] = 2000
+                else:
+                    edges[i] = self.__find_k_bound(band[i-1], )
 
         # edges = np.array([ bands_edges[i](k_m) for i in range(bands[band]+1)])
         return edges
@@ -268,9 +271,14 @@ class __spectrum__(object):
         elif radar_dispatcher == False:
             self.KT = np.array([0, np.inf])
 
+
         else: 
             self.KT = self.kEdges(rc.surface.band)
         
+
+
+        self.k = np.logspace( np.log10(self.peak/4), np.log10(2000), 10**3+1)
+
         logger.info('Set bounds of modeling %s' % str(np.round(self.KT, 2)))
 
 

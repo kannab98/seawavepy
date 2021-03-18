@@ -55,6 +55,8 @@ def spectrum_dispatcher():
                 self._x, self._U = x, U
                 self._wavelength = rc.antenna.waveLength
 
+
+
             return func(*args, **kwargs)
         return wrapper
     return decorator

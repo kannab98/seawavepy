@@ -23,8 +23,7 @@ class TestPulseModeling(unittest.TestCase):
         self.P = np.zeros_like(self.t) 
 
     def test_modeling(self):
-        
-        N = 1
+        N = 50
         t = self.t
         P = radar.create_multiple_pulses(t, N, dump=True)
         popt = retracking.pulse(2*t, P)

@@ -155,34 +155,30 @@ def linearized_cwm_grid(x0, y0, k, A):
 
 
 @cuda.jit(device=True)
-def base(surface, x, y, k, A, method):
+def base(surface, x, y, t, k, A, method):
     for n in range(k.shape[0]): 
         for m in range(k.shape[1]):
                 kr = k[n,m].real*x + k[n,m].imag*y
                 w = dispersion(k[n,m])
-                e = A[n,m] * exp(1j*kr)  # * exp(1j*w*t)
+                e = A[n,m] * exp(1j*kr)  * exp(1j*w*t)
 
                 # Высоты (z)
                 surface[0] +=  +e.real
                 # Наклоны X (dz/dx)
-                surface[1] +=  -e.imag * k[n,m].real
+                surface[4] +=  -e.imag * k[n,m].real
                 # Наклоны Y (dz/dy)
-                surface[2] +=  -e.imag * k[n,m].imag
+                surface[5] +=  -e.imag * k[n,m].imag
                 # Орбитальные скорости Vz (dz/dt)
-                surface[3] +=  -e.imag * w
+                surface[1] +=  -e.imag * w
 
                 # Vh -- скорость частицы вдоль направления распространения ветра.
                 # см. [shuleykin], гл. 3, пар. 5 Энергия волн.
                 # Из ЗСЭ V_h^2 + V_z^2 = const
 
                 # Орбитальные скорости Vx
-                surface[4] += e.real * w * k[n,m].real/abs(k[n,m])
+                surface[2] += e.real * w * k[n,m].real/abs(k[n,m])
                 # Орбитальные скорости Vy
-                surface[5] += e.real * w * k[n,m].imag/abs(k[n,m])
-
-
-
-
+                surface[3] += e.real * w * k[n,m].imag/abs(k[n,m])
 
                 # # Поправка на наклоны заостренной поверхности
                 # if method == "cwm":
@@ -196,7 +192,7 @@ def base(surface, x, y, k, A, method):
     return surface
 
 @cuda.jit
-def cwm(ans, x, y, k, A):
+def cwm(ans, x, y, t, k, A):
     i = cuda.grid(1)
 
     if i >= x.shape[0]:
@@ -209,16 +205,17 @@ def cwm(ans, x, y, k, A):
 
 
 @cuda.jit
-def default(ans, x, y, k, A):
-    i = cuda.grid(1)
-
-    if i >= x.shape[0]:
-        return
+def default_test(ans, x, y, t, k, A):
+    i, j, n = cuda.grid(3)
 
     surface = cuda.local.array(6, float32)
-    surface = base(surface, x[i], y[i], k, A, 'default')
-    for j in range(6):
-        ans[j, i] = surface[j]
+    surface = base(surface, x[i], y[j], t[n], k, A, 'default')
+
+    for m in range(6):
+        ans[m, i, j, n] = surface[m]
+
+def empty():
+    pass
 
 
 @cuda.jit
@@ -236,21 +233,3 @@ def check_cwm_grid(x, y, k, A):
             y[i] -= e.imag * k[n,m].imag/abs(k[n,m])
 
 
-def init(kernel, arr, x, y, t, host_constants):
-    cuda_constants = tuple(
-        cuda.to_device(host_constants[i]) for i in range(len(host_constants))
-    )
-
-    threadsperblock = (8, 8, 4)
-    shape = (x.size, y.size, t.size)
-
-    blockspergrid = tuple( 
-        math.ceil(shape[i] / threadsperblock[i]) for i in range(len(threadsperblock))
-    )
-
-    x0 = x
-    y0 = y
-
-    x0 = cuda.to_device(x0)
-    y0 = cuda.to_device(y0)
-    kernel[blockspergrid, threadsperblock](arr, x0, y0, t, *cuda_constants)

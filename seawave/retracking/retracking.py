@@ -75,6 +75,8 @@ class __retracking__():
             for file in files:
                 _files_ += rx.findall(file)
 
+
+        print(_files_)
         columns = pd.MultiIndex.from_product([ _files_, ["t", "P"] ], names=["file", "data"])
         df0 = pd.DataFrame(columns=columns)
 
@@ -82,6 +84,8 @@ class __retracking__():
 
         for i, f in enumerate(_files_):
             sr = pd.read_csv(os.path.join(path, f), sep="\s+", comment="#")
+            print(sr)
+            print(df0)
             df0[f, "t"] = sr.iloc[:, 0]
             df0[f, "P"] = sr.iloc[:, 1]
 
@@ -95,7 +99,7 @@ class __retracking__():
 
         df.to_excel(excel_name, sheet_name='brown')
 
-        with pd.ExcelWriter(excel_name, mode='a') as writer:  
+        with pd.ExcelWriter(excel_name, mode='a', engine='openpyxl') as writer:  
             df0.to_excel(writer, sheet_name='raw')
 
         return df0, df

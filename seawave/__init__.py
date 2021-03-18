@@ -1,20 +1,25 @@
 from json import load
 import logging
 import sys, os
+import xarray as xr
+import numpy as np
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-fh = logging.FileHandler('modeling.log')
-fh.setFormatter(formatter)
-logger.addHandler(fh)
+
 
 sh = logging.StreamHandler(sys.stdout)
 sh.setFormatter(formatter)
 logger.addHandler(sh)
 
 logger.debug('Welcome to project repo: https://github.com/kannab98/seawavepy')
+
+
+
+        
+        
 
 class rcParams():
 
@@ -74,5 +79,26 @@ class rcParams():
                 setattr(attr, key, value[0])
 
 rc = rcParams()
+DATADIR = ""
+# if rc.dump.createDir and rc.dump.enable:
+#     print(True)
 
+#     import datetime
+#     suffix = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
+#     prefix = rc.dump.dirPrefix
+#     if not os.path.exists(prefix + suffix):
+#         os.makedirs(prefix + suffix)
+#         DATADIR = prefix + suffix
 
+fh = logging.FileHandler('modeling.log')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
+
+import xarray as xr
+dataset = xr.Dataset()
+
+import atexit
+def exit_handler():
+    print('My application is ending!')
+
+# atexit.register(exit_handler)

@@ -2,6 +2,7 @@ import numpy as np
 import os.path
 import json
 import pandas as pd
+import xarray as xr
 import logging
 from . import cuda
 from . import rc
@@ -28,44 +29,22 @@ band = np.array(["C", "X", "Ku", "Ka"])
 TPB=16
 
 
-def init(kernel, arr, X, Y, host_constants):
-    cuda_constants = tuple(cuda.to_device(host_constants[i]) for i in range(len(host_constants)))
-    threadsperblock = TPB 
-    blockspergrid = math.ceil(X.size / threadsperblock)
+    #         logger.debug("Use regular meshgrid")
 
-    X0 = X
-    Y0 = Y
-    if kernel.__dict__['py_func'].__name__ == "cwm":
+    #     else:
+    #         logger.warning("Can't complete regularization. " + 
+    #                         "Use irregular meshgrid with epsabs=%.6f" % epsabs)
+    #     # print(X)
+    #     # print(X0)
 
-        logger.debug("Irregular meshgrid. Initializing regularization")
-        X0 = X0.flatten()
-        Y0 = Y0.flatten()
-        modeling.cuda.linearized_cwm_grid[blockspergrid, threadsperblock](X0, Y0, *cuda_constants)
-        X_check = np.array(X0)
-        Y_check = np.array(Y0)
-        modeling.cuda.check_cwm_grid[blockspergrid, threadsperblock](X_check, Y_check, *cuda_constants)
-
-
-
-        epsabs = np.sqrt(np.sum((X.flatten() - X_check)**2))/X.size
-
-        if epsabs <= 1e-3:
-            logger.debug("Use regular meshgrid")
-
-        else:
-            logger.warning("Can't complete regularization. " + 
-                            "Use irregular meshgrid with epsabs=%.6f" % epsabs)
-        # print(X)
-        # print(X0)
-
-    X0 = cuda.to_device(X0)
-    Y0 = cuda.to_device(Y0)
-    kernel[blockspergrid, threadsperblock](arr, X0, Y0, *cuda_constants)
+    # X0 = cuda.to_device(X0)
+    # Y0 = cuda.to_device(Y0)
+    # kernel[blockspergrid, threadsperblock](arr, X0, Y0, t, *cuda_constants)
 
 
 
 
-    return arr, X, Y
+    # return arr, X, Y
 
 def simple_launch(kernel):
     logger.debug("Use %s kernel" % kernel.__dict__['py_func'].__name__)
@@ -77,7 +56,8 @@ def simple_launch(kernel):
     Y = Y.flatten()
     arr = np.zeros((6, X.size))
 
-    arr, X0, Y0 = init(kernel, arr, X, Y, model_coeffs)
+    t = surface.time
+    arr, X0, Y0 = init(kernel, arr, X, Y, t, model_coeffs)
     X0 = np.array([X0])
     Y0 = np.array([Y0])
 
@@ -103,9 +83,18 @@ def simple_launch(kernel):
     #     logger.warning("Practice variance of full slopes sigma^2 not matches with theory")
 
 
-    labels = ['z', 'sx', 'sy', 'vz', 'vx', 'vy']
+    # labels = ['z', 'sx', 'sy', 'vz', 'vx', 'vy']
+    labels = ['elevations', 'slopes x', 'slopes y', 'velocity z', 'velocity x', 'velocity y']
 
-    df = pd.DataFrame({label: arr[i] for i, label in enumerate(labels)})
+    ds = xr.Dataset(
+        {label: ( ["time", "x", "y"], arr[i]) for i, label in enumerate(labels)}, 
+        coords={
+            "lon": (["x", "y"], x),
+            "lat": (["x", "y"], y),
+            "time": t,
+        },
+    )
+
     return df
 
 
@@ -164,6 +153,7 @@ def launch(kernel):
     model_coeffs = surface.export()
 
     X, Y = surface.meshgrid
+    t = surface.time
     arr = __kernel_per_band__(kernel, X, Y, model_coeffs)
 
     size = (rc.surface.gridSize, rc.surface.gridSize)
