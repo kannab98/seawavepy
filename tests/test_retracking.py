@@ -6,4 +6,4 @@ from seawave.retracking import retracking
 
 
 df0, df = retracking.from_file('tests/impulses/.*.txt')
-# print(df0)
+print(df0)

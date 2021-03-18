@@ -94,11 +94,11 @@ fh = logging.FileHandler('modeling.log')
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 
-import xarray as xr
-dataset = xr.Dataset()
+# import xarray as xr
+# dataset = xr.Dataset()
 
-import atexit
-def exit_handler():
-    print('My application is ending!')
+# import atexit
+# def exit_handler():
+#     print('My application is ending!')
 
 # atexit.register(exit_handler)
