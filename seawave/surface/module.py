@@ -34,15 +34,7 @@ def default(ans, x, y, t, k, A):
     i, j, n = cuda.grid(3)
 
     surface = cuda.local.array(6, float32)
-    kr = cuda.local.array((x.size, y.size, *k.shape))
-
-
-    for n in range(k.shape[0]): 
-        for m in range(k.shape[1]):
-            kr[i,j,n,m] = k[n,m].real*x + k[n,m].imag*y
-
-    # surface = base(surface, x[i], y[j], t[n], k, A)
-    surface = base(surface, kr[i,j,:,:], t[n], k, A)
+    surface = base(surface, x[i], y[j], t[n], k, A)
     for m in range(6):
         ans[m, i, j, n] = surface[m]
 
@@ -52,7 +44,7 @@ def base(surface, x, y, t, k, A):
 
     for n in range(k.shape[0]): 
         for m in range(k.shape[1]):
-                # kr = k[n,m].real*x + k[n,m].imag*y
+                kr = k[n,m].real*x + k[n,m].imag*y
                 w = dispersion(k[n,m])
                 e = A[n,m] * exp(1j*kr[n,m])  * exp(1j*w*t)
 
