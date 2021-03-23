@@ -10,15 +10,72 @@ from .. import rc, DATADIR
 from .. import dataset as ds 
 from . import dataset
 from ..spectrum import spectrum
-import numba as nb
-from .. import cuda
+from numba import cuda, float32
+# from .. import cuda
 import math
+from cmath import exp, phase
 import xarray as xr
 
 import logging
 logger = logging.getLogger(__name__)
 import matplotlib.pyplot as plt
 import os
+import atexit
+
+g = rc.constants.gravityAcceleration
+
+@cuda.jit(device=True)
+def dispersion(k):
+    k = abs(k)
+    return math.sqrt(g*k + 74e-6*k**3)
+
+@cuda.jit
+def default(ans, x, y, t, k, A):
+    i, j, n = cuda.grid(3)
+
+    surface = cuda.local.array(6, float32)
+    kr = cuda.local.array((x.size, y.size, *k.shape))
+
+
+    for n in range(k.shape[0]): 
+        for m in range(k.shape[1]):
+            kr[i,j,n,m] = k[n,m].real*x + k[n,m].imag*y
+
+    # surface = base(surface, x[i], y[j], t[n], k, A)
+    surface = base(surface, kr[i,j,:,:], t[n], k, A)
+    for m in range(6):
+        ans[m, i, j, n] = surface[m]
+
+
+@cuda.jit(device=True)
+def base(surface, x, y, t, k, A):
+
+    for n in range(k.shape[0]): 
+        for m in range(k.shape[1]):
+                # kr = k[n,m].real*x + k[n,m].imag*y
+                w = dispersion(k[n,m])
+                e = A[n,m] * exp(1j*kr[n,m])  * exp(1j*w*t)
+
+                # Высоты (z)
+                surface[0] +=  +e.real
+
+                # Орбитальные скорости Vz (dz/dt)
+                surface[1] +=  -e.imag * w
+
+                # Vh -- скорость частицы вдоль направления распространения ветра.
+                # см. [shuleykin], гл. 3, пар. 5 Энергия волн.
+                # Из ЗСЭ V_h^2 + V_z^2 = const
+
+                # Орбитальные скорости Vx
+                surface[2] += e.real * w * k[n,m].real/abs(k[n,m])
+                # Орбитальные скорости Vy
+                surface[3] += e.real * w * k[n,m].imag/abs(k[n,m])
+                # Наклоны X (dz/dx)
+                surface[4] += -e.imag * k[n,m].real
+                # Наклоны Y (dz/dy)
+                surface[5] += -e.imag * k[n,m].imag
+
+    return surface
 
 
 def dispatcher(func):
@@ -76,18 +133,6 @@ class __surface__(object):
 
 
 
-    @staticmethod
-    def abs(vec):
-        vec = np.array(vec, dtype=float)
-        return np.diag(vec.T@vec)
-
-    @staticmethod
-    def position(r, r0):
-        r0 = r0[np.newaxis]
-        return np.array(r + (np.ones((r.shape[1], 1)) @ r0).T)
-
-    def __call__(*args, **kwargs):
-        return self.export()
 
     def __init__(self, **kwargs):
 
@@ -165,7 +210,53 @@ class __surface__(object):
         else:
             self.psi = self.__psi__
 
+
         return k, A0*np.exp(1j*self.psi)
+    
+    def __call__(self, srf, kernel=default):
+        host_constants = self.export()
+        srf['spectrum'] = dataset.spectrum(*host_constants)
+        srf = init(srf, host_constants, kernel = default)
+        dataset.statistics(srf)
+
+        
+        exit_handler = lambda: srf.to_netcdf('kek.nc')
+
+
+    
+        atexit.register(exit_handler)
+
+        return srf
+
+
+def init(srf: xr.Dataset, host_constants, kernel=default):
+
+    x = srf.coords["x"].values
+    y = srf.coords["y"].values
+    t = srf.coords["time"].values
+
+    arr = np.stack([srf.elevations.values, *srf.velocities.values, *srf.slopes.values], axis=0)
+
+    cuda_constants = tuple(cuda.to_device(host_constants[i]) for i in range(len(host_constants)))
+    threadsperblock = (8, 8, 4)
+    sizes = (x.size, y.size, t.size)
+    blockspergrid = tuple( math.ceil(sizes[i] / threadsperblock[i]) for i in range(len(threadsperblock)))
+
+    x0 = cuda.to_device(x)
+    y0 = cuda.to_device(y)
+    t0 = cuda.to_device(t)
+
+    kernel[blockspergrid, threadsperblock](arr, x0, y0, t0, *cuda_constants)
+
+    srf.elevations.values = arr[0]
+    srf.coords['Z'].values = arr[0]
+    srf.velocities.values = arr[1:4]
+    srf.slopes.values = arr[4:7]
+
+    return srf
+
+
+
     
 
 class float_surface():
@@ -174,3 +265,7 @@ class float_surface():
 
     def __init__(self, ):
         pass 
+
+
+
+

@@ -4,114 +4,32 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-from ..surface import surface
+from ..surface import surface, dataset
 from .. import rc, kernel, cuda, DATADIR
 
-from numba import njit, prange
+from numba import njit, jit, prange, guvectorize
 import scipy as sp
 import pandas as pd
+import xarray as xr
 
 logger = logging.getLogger(__name__)
+
+
 class __radar__():
 
-    def dispatcher(func):
-        """
-        Декоратор обновляет необходимые переменные при изменении
-        разгона или скорости ветра
-        """
-        def wrapper(*args, **kwargs):
-            self = args[0]
-            x = rc.surface.x
-            y = rc.surface.y
-            gridSize = rc.surface.gridSize
-            N = rc.surface.kSize
-            M = rc.surface.phiSize
-
-            if self._n.all() != surface.normal.all() or \
-                self._coordinates.all() != self.sattelite_coordinates.all():
-                self.geometryUpdate()
-            
-
-
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    def geometryUpdate(self):
-
-        if self._coordinates.all() != self.sattelite_coordinates.all():
-            logger.info('Init radar with position %s' % str(self.sattelite_coordinates))
-            self._coordinates = self.sattelite_coordinates
-
-        if self._gainWidth != rc.antenna.gainWidth or self._waveLength != rc.antenna.waveLength:
-            logger.info('Transmitter params: gain_width=%.1f, wave length=%s' % (rc.antenna.gainWidth, str(rc.antenna.waveLength)) )
-            self._gainWidth = rc.antenna.gainWidth
-            self._waveLength = rc.antenna.waveLength
-
-        self._R[:] = self.position(surface.coordinates, self.sattelite_coordinates)
-        # Смещение координаты x!
-        offset = rc.antenna.z*np.arctan(np.deg2rad(rc.antenna.deviation))
-        R0 = np.array([offset, 0, 0])[None].T*np.ones((1,self._R.shape[-1]))
-
-        self._R += R0
-        self._n[:] = surface.normal
-        self._n[:] = self._n/self.abs(self._n)
-        self._Rabs = self.abs(self._R)
-
-
-
-
-    def __init__(self):
-
-        labels = ['x', 'y', 'z', 'nx', 'ny', 'nz']
-        srf = np.zeros((len(labels), np.prod(rc.surface.gridSize)))
-        self._data = pd.DataFrame(srf.T, columns=labels)
-
-
-        self._R = np.array([
-            np.frombuffer(self._data.x.values),
-            np.frombuffer(self._data.y.values),
-            np.frombuffer(self._data.z.values),
-        ], dtype="object")
-
-        self._n = np.array([
-            np.frombuffer(self._data.nx.values),
-            np.frombuffer(self._data.ny.values),
-            np.frombuffer(self._data.nz.values),
-        ], dtype="object")
+    def __call__(self, srf: xr.Dataset):
+        srf = dataset.radar(srf)
+        self._R = np.array([srf['X'], srf['Y'], srf['Z']])
+        # self._Rabs = srf.distance.values
+        self._n = self.normal(srf)
 
         self._gainWidth = None
         self._waveLength = None
         self._coordinates = np.array([None])
+        return srf
 
-
-
-        self._Rabs = None
-
-        # self.geometryUpdate()
-
+    def __init__(self, ):
         self._gamma = 2*np.sin(rc.antenna.gainWidth/2)**2/np.log(2)
-        # self._G = self.G(self._R, 
-        #                     rc.antenna.polarAngle, 
-        #                     rc.antenna.deviation, self._gamma)
-
-
-        # self.tau = self._Rabs / rc.constants.lightSpeed
-        # self.t0 = self._Rabs.min() / rc.constants.lightSpeed
-
-
-
-    @staticmethod
-    def abs(vec):
-        vec = np.array(vec, dtype=float)
-        return np.sqrt(np.sum(vec**2,axis=0))
-        # return np.sqrt(np.diag(vec.T@vec))
-
-    @staticmethod
-    def position(r, r0):
-        r0 = r0[np.newaxis]
-        return np.array(r + ( np.ones((r.shape[1], 1) ) @ r0 ).T)
-
 
     
     @staticmethod
@@ -149,109 +67,71 @@ class __radar__():
         return np.exp(-2/gamma * np.sin(theta)**2)
 
 
-    @property
-    def sattelite_coordinates(self):
-        return np.array([rc.antenna.x, rc.antenna.y, rc.antenna.z])
-
-    @sattelite_coordinates.setter
-    def sattelite_coordinates(self, r):
-        rc.antenna.x, rc.antenna.y, rc.antenna.z = r
-        self._R = self.position(self.surface_coordinates, self.sattelite_coordinates)
-        self._Rabs = self.abs(self._R)
-
-
-
-    @property
-    def incidence(self):
-        z = np.array(self._R[-1], dtype=float)
-        R = np.array(self._Rabs, dtype=float)
-        return np.arccos(z/R)
-
-    def localIncidence(self, xi=0):
-        rc.antenna.deviation = xi
-        # self.geometryUpdate()
-        R = np.array(self._R/self._Rabs, dtype=float)
-        n = np.array(self._n, dtype=float)
-
-
-
-
-        # print(R.shape)
-
-
-        # Матрица поворта вокруг X
-        # Mx = self.rotatex(np.pi/2)
-        # My = self.rotatey(np.pi/2)
-        # taux = np.einsum('ij, jk -> ik', My, n)
-        # tauy = np.einsum('ij, jk -> ik', Mx, n)
-
-        theta0n = np.einsum('ij, ij -> j', R, n)
-        # theta0tau = np.einsum('ij, ij -> j', R, taux)
-        # theta0tauy = np.einsum('ij, ij -> j', R, tauy)
-
-
-        # return np.sign(theta0tau)*np.arccos(theta0n)
-        return np.arccos(theta0n)
-
-    @staticmethod
-    def rotatex(alpha):
-        Mx = np.array([
-            [1,             0,             0 ],
-            [0, np.cos(alpha), -np.sin(alpha)],
-            [0, np.sin(alpha), +np.cos(alpha)]
-        ])
-        return Mx
-
-    @staticmethod
-    def rotatey(alpha):
-        My = np.array([
-            [+np.cos(alpha), 0, np.sin(alpha)],
-            [0,              1,            0 ],
-            [-np.sin(alpha), 0, np.cos(alpha)]
-        ])
-        return My
-
-    @staticmethod
-    def sort(incidence, xi=0, err = 0.7):
-
-        # if not isinstance(xi, np.ndarray):
-        #     if isinstance(xi, list):
-        #         xi = np.array(xi)
-        #     else:
-        #         xi = np.array([xi])
-
-        # xi = xi[np.newaxis]
-
-        # theta0 = np.abs(incidence - xi.T)
-        
-        # index = np.abs(theta0) < np.deg2rad(err)
-        index = np.where(incidence < np.deg2rad(err))
-        return index
-
-    
     def gain(self, theta, xi):
         self._G = self.G(self._R, 
                             theta,
                             xi, self._gamma)
         return self._G
+    @staticmethod
+    def normal(srf):
+
+        n = srf.slopes.copy()
+        n.values = srf['slopes'].values/np.linalg.norm(srf['slopes'].values, axis=0)
+        n.attrs = dict(
+            description="normal to surface"
+        )
+
+        srf['normal'] = n
+        return n
+
+    @staticmethod
+    def angle_of_departure(srf):
+        AoD = srf.elevations.copy()
+        AoD.values = srf['Z']/srf['distance']
+        AoD.attrs=dict( description = "Angle of departure")
+
+        srf['AoD'] = AoD
+        return AoD.values
+
+    @staticmethod
+    def angle_of_arrival(srf, xi=0):
+        d = srf['distance'].values
+        n = srf['normal'].values
+        r = np.array([srf['X'], srf['Y'], srf['Z']])
+        rc.antenna.deviation = xi
+
+        AoA = srf.elevations.copy()
+        prod = np.einsum('ijkm, ijkm -> jkm', r/d, n)
+        AoA.values = np.arccos(prod)
+        AoA.attrs=dict(
+                description="Angle of arrival",
+            )
+
+        srf['AoA'] = AoA
 
     
-    
-    @dispatcher
-    def power(self, t):
+    def power(self, srf, t):
         c =  rc.constants.lightSpeed
         timp = rc.antenna.impulseDuration
-        G = self.gain(self.incidence, rc.antenna.deviation)
-        theta0 = self.localIncidence(xi=rc.antenna.deviation)
-        Rabs = self._Rabs
+        G = self.gain(srf['AoD'], rc.antenna.deviation)
+        self.angle_of_arrival(srf, xi=rc.antenna.deviation)
+        d = srf['distance'].values
+        AoA = srf['AoA'].values
+ 
 
-        P = power_vec(t, Rabs, G, theta0, timp, c)
+
+        P = np.zeros((t.size, *d.shape), dtype=float)
+        numba_power(t, d, G, AoA, P)
+        P = np.sum(P**2/2, axis=(1,2))
+
+
+
 
         return P
 
     
-    def find_rho(self):
-        sigmaxx = np.var(surface.data.sx)
+    def find_rho(self, srf):
+        sigmaxx = srf['VoS'].values[0,:].max()
         theta = lambda rho: np.arctan(rho/rc.antenna.z)
         Wxx = lambda x: 1/np.sqrt(2*np.pi*sigmaxx**2) * np.exp(-x**2/(2*sigmaxx**2))
         eps = np.deg2rad(1)
@@ -262,16 +142,16 @@ class __radar__():
 
         return sp.optimize.root_scalar(F, bracket=[0, rc.surface.x[1]]).root
     
-    def find_tmax(self):
-        tmax = np.sqrt(self.find_rho()**2 + (rc.antenna.z-surface.data.z.min())**2)/rc.constants.lightSpeed
+    def find_tmax(self, srf):
+
+        tmax = np.sqrt(self.find_rho(srf)**2 + (rc.antenna.z-srf['elevations'].min())**2)/rc.constants.lightSpeed
         return 1.04*tmax
 
 
-    def find_tmin(self):
-        tmin = (rc.antenna.z - surface.data.z.max())/rc.constants.lightSpeed 
+    def find_tmin(self, srf):
+        tmin = (rc.antenna.z - srf['elevations'].max())/rc.constants.lightSpeed 
         return tmin*0.99
 
-    @dispatcher
     def create_multiple_pulses(self, N, t=None, dump=False):
         P = 0
 
@@ -345,12 +225,17 @@ class __radar__():
 
     
 
-@njit(parallel=True)
-def power_vec(t, Rabs, G, theta0, timp, c):
-    P = np.zeros(t.size)
+@guvectorize(
+    ["void(float64[:], float64[:,:,:], float64[:,:,:], float64[:,:,:], float64[:,:,:,:])"],
+    "(n), (x,y,t), (x,y,t), (x,y,t) -> (n,x,y,t)", forceobj=True, target='parallel'
+)
+def numba_power(t, Rabs, G, theta0, result, ):
+    timp = rc.antenna.impulseDuration
+    c = rc.constants.lightSpeed
     tau = Rabs / c
-    for i in prange(t.size):
-        mask = (0 <= t[i] - tau) & (t[i] - tau <= timp) & (theta0 <= np.deg2rad(1))
-        E0 = (G[:,mask]/Rabs[mask])**2
-        P[i] = np.sum(E0**2/2)
-    return P
+    t = np.expand_dims(t, axis=(0,1,2) ).T
+    mask = (0 <= t - tau) & (t - tau <= timp) & (theta0 <= np.deg2rad(1))
+    np.power(G/Rabs, 2, where=mask, out=result)
+    return result
+
+

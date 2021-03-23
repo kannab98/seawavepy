@@ -156,6 +156,9 @@ def linearized_cwm_grid(x0, y0, k, A):
 
 @cuda.jit(device=True)
 def base(surface, x, y, t, k, A, method):
+
+    # kr = np.einsum('nij, nkm -> ijkm', k, r)
+    # srf = np.real(np.einsum('km, kmij -> ij', host_constants[1], np.exp(1j*kr)))
     for n in range(k.shape[0]): 
         for m in range(k.shape[1]):
                 kr = k[n,m].real*x + k[n,m].imag*y
@@ -205,7 +208,7 @@ def cwm(ans, x, y, t, k, A):
 
 
 @cuda.jit
-def default_test(ans, x, y, t, k, A):
+def default(ans, x, y, t, k, A):
     i, j, n = cuda.grid(3)
 
     surface = cuda.local.array(6, float32)

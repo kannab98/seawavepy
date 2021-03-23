@@ -1,13 +1,10 @@
 import numpy as np
 import xarray as xr
-import atexit
+
 from .. import rc
 
 datasets = []
 
-
-# def exit_handler():
-    # print('My application is ending!')
 
 def slopes(x: np.ndarray, y: np.ndarray, z: np.ndarray, t: np.ndarray, ):
 
@@ -78,8 +75,8 @@ def elevations(x: np.ndarray, y: np.ndarray, t: np.ndarray):
 
 def spectrum(k: np.ndarray, A: np.ndarray):
     da = xr.DataArray(
-        data=A,
-        dims=["k", "phi"],
+        data=[np.abs(A), np.angle(A)],
+        dims=["type", "k", "phi"],
         coords=dict(
             waveNumber = (["k", "phi"], np.abs(k)),
             azimuth = (["k", "phi"], np.angle(k))
@@ -147,3 +144,58 @@ def radar(srf: xr.Dataset):
     srf['mask'] = mask
 
     return srf
+
+def pulse(P: np.ndarray, t: np.ndarray, time_relative: np.ndarray):
+    da = xr.DataArray(
+        data = P,
+        dims = ["time_relative", "time"],
+        coords = dict(
+                time_relative = time_relative,
+                time = t,
+        ),
+        attrs=dict(
+            description="Мощность отраженного импульса"
+        )
+    )
+    return da
+
+def statistics(srf: xr.Dataset) -> xr.Dataset:
+    varelev = xr.DataArray(
+        data   = np.var(srf['elevations'].values, axis=(0,1)),
+        dims   = ["time"],
+        coords = dict(
+            time = srf['time'].values
+        ),
+        attrs=dict(
+            description="Variance of elevations",
+            units = "m^2",
+        )
+    )
+
+    meanelev = xr.DataArray(
+        data   =  np.mean(srf['elevations'].values, axis=(0,1)),
+        dims   = ["time"],
+        coords = dict(
+            time = srf['time'].values
+        ),
+        attrs=dict(
+            description="Mean of elevations",
+            units = "m",)
+    )
+
+
+    varslopes = xr.DataArray(
+        data   = np.var(srf['slopes'].values, axis=(1,2)),
+        dims   = ["proj","time"],
+        coords = dict(
+            time = srf['time'].values
+        ),
+        attrs=dict(
+            description="Variance of slopes",
+            units = "a.u.",
+        )
+    )
+
+    srf["VoE"] = varelev
+    srf["MoE"] = meanelev
+    srf["VoS"] = varslopes

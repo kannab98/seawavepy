@@ -5,13 +5,13 @@ import xarray as xr
 
 
 
-def float_surface(x: np.ndarray, y: np.ndarray, t: np.ndarray, ):
+def float_surface(x: np.ndarray, y: np.ndarray, t: np.ndarray, ) -> xr.Dataset:
     z = elevations(x, y, t)
     n = slopes(x, y, z.values, t)
     v = velocities(x, y, z.values, t)
 
     ds = xr.Dataset( {'elevations': z, 'slopes': n, 'velocities':v} )
-    return ds: xr.Dataset
+    return ds
 
 def slopes(x: np.ndarray, y: np.ndarray, z: np.ndarray, t: np.ndarray, ):
 
@@ -123,6 +123,10 @@ def radar(srf: xr.Dataset):
 
     d = distance.values
     n = srf.slopes.values/np.linalg.norm(srf.slopes.values, axis=0)
+    n.attrs = dict(
+        description="normal to surface"
+    )
+
     AoA = srf.elevations.copy()
     AoA.values = np.arccos(np.einsum('ijkm, ijkm -> jkm', r/d, n/np.linalg.norm(n, axis=0)))
     AoA.attrs=dict(
@@ -139,8 +143,10 @@ def radar(srf: xr.Dataset):
 
 
     srf['distance'] = distance
+    srf['normal'] = n
     srf['AoD'] = AoD
     srf['AoA'] = AoD
     srf['mask'] = mask
+
 
     return srf
