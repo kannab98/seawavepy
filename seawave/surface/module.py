@@ -3,14 +3,11 @@ from numpy import pi
 from scipy import interpolate, integrate
 import scipy as sp
 import pandas as pd
-from multiprocessing import Array, Process, Pool, cpu_count
-from itertools import product
-
-from .. import rc, DATADIR
+from .. import rc
 from .. import dataset as ds 
 from . import dataset
 from ..spectrum import spectrum
-from numba import cuda, float32
+from numba import cuda, float32, guvectorize
 # from .. import cuda
 import math
 from cmath import exp, phase
@@ -30,13 +27,13 @@ def dispersion(k):
     return math.sqrt(g*k + 74e-6*k**3)
 
 @cuda.jit
-def default(ans, x, y, t, k, A):
+def default(out, x, y, t, k, A):
     i, j, n = cuda.grid(3)
 
     surface = cuda.local.array(6, float32)
     surface = base(surface, x[i], y[j], t[n], k, A)
     for m in range(6):
-        ans[m, i, j, n] = surface[m]
+        out[m, i, j, n] = surface[m]
 
 
 @cuda.jit(device=True)
@@ -46,7 +43,7 @@ def base(surface, x, y, t, k, A):
         for m in range(k.shape[1]):
                 kr = k[n,m].real*x + k[n,m].imag*y
                 w = dispersion(k[n,m])
-                e = A[n,m] * exp(1j*kr[n,m])  * exp(1j*w*t)
+                e = A[n,m] * exp(1j*kr)  * exp(1j*w*t)
 
                 # Высоты (z)
                 surface[0] +=  +e.real
@@ -149,25 +146,6 @@ class __surface__(object):
     # def cwmCorrection(self, moments):
         
 
-    @staticmethod
-    def cross_section(theta, cov): 
-        # theta = Surface.angle_correction(theta)
-        theta = theta[np.newaxis]
-        # Коэффициент Френеля
-        F = 0.8
-
-        if len(cov.shape) <= 2:
-            cov = np.array([cov])
-
-        K = np.zeros(cov.shape[0])
-        for i in range(K.size):
-            K[i] = np.linalg.det(cov[i])
-
-        sigma =  F**2/( 2*np.cos(theta.T)**4 * np.sqrt(K) )
-        sigma *= np.exp( - np.tan(theta.T)**2 * cov[:, 1, 1]/(2*K))
-        return sigma
-
-
 
 
     @staticmethod
@@ -212,10 +190,9 @@ class __surface__(object):
         dataset.statistics(srf)
 
         
-        exit_handler = lambda: srf.to_netcdf('kek.nc')
+        exit_handler = lambda: srf.to_netcdf('database.nc')
 
 
-    
         atexit.register(exit_handler)
 
         return srf

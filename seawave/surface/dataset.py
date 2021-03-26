@@ -55,6 +55,7 @@ def velocities(x: np.ndarray, y: np.ndarray, z: np.ndarray, t: np.ndarray, ):
 def elevations(x: np.ndarray, y: np.ndarray, t: np.ndarray):
     arr = np.zeros((x.size, y.size, t.size))
     X, Y, T = np.meshgrid(x, y, t)
+    k = np.array([[]],dtype=object)
 
     da = xr.DataArray(
         data=arr,
@@ -63,6 +64,7 @@ def elevations(x: np.ndarray, y: np.ndarray, t: np.ndarray):
             X=(["x", "y", "time"], X),
             Y=(["x", "y", "time"], Y),
             time=t,
+
         ),
         attrs=dict(
             description="Array with surface elevations data.",

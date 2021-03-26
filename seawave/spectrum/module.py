@@ -90,7 +90,7 @@ class __spectrum__(object):
         return self.KT
 
     @dispatcher()
-    def __call__(self, k, phi=None):
+    def __call__(self, k, phi=None, kind="spec"):
 
         if not isinstance(k, np.ndarray):
             k = np.array([k])
@@ -104,8 +104,9 @@ class __spectrum__(object):
             self.piecewise_spectrum(j-1, k, where = (limit[j-1] <= k) & (k <= limit[j]), out=spectrum1d)
         
         if not isinstance(phi, type(None)):
-            azdist = self.azimuthal_distribution(k, phi)
-            spectrum = spectrum1d * azdist.T
+            spectrum = self.azimuthal_distribution(k, phi)
+            if kind == "spec":
+                spectrum = spectrum1d * spectrum.T
         else: 
             spectrum = spectrum1d
             
