@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 package_data = { 
-    "":["*.json"] 
+    "":["*.json", "*.toml"] 
 }
 setuptools.setup(
     name="seawavepy",
