@@ -10,14 +10,12 @@ from numba import vectorize, float64
 from ..__decorators__ import spectrum_dispatcher as dispatcher
 from ..__decorators__ import ufunc
 # from .integrate import quad as specquad
-from .. import rc
+from .. import config
 
 
 
-g = rc.constants.gravityAcceleration
+g = config['Constants']['GravityAcceleration']
 logger = logging.getLogger(__name__)
-
-
 
 
 
@@ -74,10 +72,10 @@ class dispersion:
 class __spectrum__(object):
 
     def __init__(self):
-        self._x = rc.surface.nonDimWindFetch
-        self._U = rc.wind.speed
-        self._band = rc.surface.band
-        self._wavelength = rc.antenna.waveLength
+        self._x = config['Surface']['NonDimWindFetch']
+        self._U = config['Wind']['Speed']
+        self._wavelength = config['Radar']['WaveLength']
+        self._band = config["Surface"]["Band"]
         self.k_m = None
         self.peak = None
         self.KT = np.array([1.49e-2, 2000])
@@ -86,11 +84,15 @@ class __spectrum__(object):
         # self.peakUpdate(True)
 
     @property
+    @dispatcher()
     def bounds(self):
         return self.KT
 
     @dispatcher()
-    def __call__(self, k, phi=None, kind="spec"):
+    def __call__(self, k=None, phi=None, kind="spec"):
+        
+        if np.array([k]).all() == None:
+            k = self.k
 
         if not isinstance(k, np.ndarray):
             k = np.array([k])
@@ -104,12 +106,17 @@ class __spectrum__(object):
             self.piecewise_spectrum(j-1, k, where = (limit[j-1] <= k) & (k <= limit[j]), out=spectrum1d)
         
         if not isinstance(phi, type(None)):
-            spectrum = self.azimuthal_distribution(k, phi)
+            spectrum = self.azimuthal_distribution(k, phi, dtype='Wind')
             if kind == "spec":
                 spectrum = spectrum1d * spectrum.T
         else: 
             spectrum = spectrum1d
-            
+        
+
+        if not isinstance(phi, type(None)) and config['Swell']['Enable']:
+            swell1d = self.swell_spectrum(k)
+            swell = swell1d * self.azimuthal_distribution(k, phi, dtype="Swell").T
+            spectrum = spectrum + swell.T
 
         return spectrum
 
@@ -136,7 +143,7 @@ class __spectrum__(object):
 
 
         epsabs = 1.49e-6
-        Func = lambda k_bound: self.quad(2, 0, 0, k_bound,  speckwargs=speckwargs, epsabs=epsabs, ) - var(rc.wind.speed)
+        Func = lambda k_bound: self.quad(2, 0, 0, k_bound,  speckwargs=speckwargs, epsabs=epsabs, ) - var(self._U)
         # Поиск граничного числа 
         # (Ищу ноль функции \integral S(k) k^2 dk = var(U10) )
         opt = optimize.root_scalar(Func, bracket=[0, 2000]).root
@@ -158,7 +165,6 @@ class __spectrum__(object):
         return root
 
 
-    @dispatcher()
     def kEdges(self, band, ):
 
         """
@@ -225,15 +231,14 @@ class __spectrum__(object):
     
 
 
-    @dispatcher()
-    def __call__dispatcher__(self):
-        return
 
     def peakUpdate(self, radar_dispatcher=True):
         logger.info('Refresh old spectrum parameters')
-        x = rc.surface.nonDimWindFetch
-        U = rc.wind.speed
-        logger.info('Start modeling with U=%.1f, Udir=%.1f, x=%.1f,' % (U, rc.wind.direction, x))
+        x = config['Surface']['NonDimWindFetch']
+        U = config['Wind']['Speed']
+        Udir = config['Wind']['Direction']
+
+        logger.info('Start modeling with U=%.1f, Udir=%.1f, x=%.1f,' % (U, Udir, x))
 
         # коэффициент gamma (см. спектр JONSWAP)
         self._gamma = self.Gamma(x)
@@ -265,20 +270,21 @@ class __spectrum__(object):
         del __limit_k, limit
 
         # массив с границами моделируемого спектра.
-        if rc.antenna.waveLength != None and radar_dispatcher:
-            logger.info('Calculate bounds of modeling for radar wave lenghts: %s' %  str(rc.antenna.waveLength) )
-            self.KT = self.kEdges(rc.antenna.waveLength)
+        waveLength = config['Radar']["WaveLength"]
+        if  waveLength != None and radar_dispatcher:
+            logger.info('Calculate bounds of modeling for radar wave lenghts: %s' %  str(waveLength) )
+
+            self.KT = self.kEdges(waveLength)
 
         elif radar_dispatcher == False:
             self.KT = np.array([0, np.inf])
-
 
         else: 
             self.KT = self.kEdges(rc.surface.band)
         
 
 
-        self.k = np.logspace( np.log10(self.peak/4), np.log10(2000), 10**3+1)
+        self.k = np.logspace( np.log10(self.peak/4), np.log10(self.KT.max()), 10**3+1)
 
         logger.info('Set bounds of modeling %s' % str(np.round(self.KT, 2)))
 
@@ -303,7 +309,7 @@ class __spectrum__(object):
     def __az_normalization__(B):
         return B/np.arctan(np.sinh(2*np.pi*B))
 
-    def azimuthal_distribution(self, k, phi):
+    def azimuthal_distribution(self, k, phi, dtype="Wind"):
         if not isinstance(k, np.ndarray):
             k = np.array([k])
 
@@ -315,7 +321,7 @@ class __spectrum__(object):
 
 
         phi = np.angle(np.exp(1j*phi))
-        phi -= np.deg2rad(rc.wind.direction)
+        phi -= np.deg2rad(config[dtype]["Direction"])
         phi = np.angle(np.exp(1j*phi))
 
 
@@ -380,8 +386,8 @@ class __spectrum__(object):
         power = [   
                     4, 
                     5, 
-                    7.647*np.power(rc.wind.speed, -0.237), 
-                    0.0007*np.power(rc.wind.speed, 2) - 0.0348*rc.wind.speed + 3.2714,
+                    7.647*np.power(self._U, -0.237), 
+                    0.0007*np.power(self._U, 2) - 0.0348*self._U + 3.2714,
                     5,
                 ]
 
@@ -399,10 +405,10 @@ class __spectrum__(object):
     def quad(self, a,b, k0=None, k1=None,  speckwargs=dict(), **quadkwargs):
     # def quad(*args, **kwargs):
         if k0==None:
-            k0 = self.KT[0]
+            k0 = self.bounds[0]
 
         if k1==None:
-            k1 = self.KT[-1]
+            k1 = self.bounds[-1]
 
         S = lambda k: self.__call__(k, **speckwargs) * k**a * dispersion.omega(k)**b
         var = integrate.quad(S, k0, k1, **quadkwargs)[0]
@@ -655,12 +661,14 @@ class __spectrum__(object):
 
 
 
+    @ufunc(2,1)
     def swell_spectrum(self, k):
 
-        omega_m = self.Omega(20170) * g/self.U10
+        omega_m = self.Omega(20170) * g/config['Swell']['Speed']
         W = np.power(omega_m/dispersion.omega(k), 5)
 
         sigma_sqr = 0.0081 * g**2 * np.exp(-0.05) / (6 * omega_m**4)
+
         spectrum = 6 * sigma_sqr * W / \
             dispersion.omega(k) * np.exp(-1.2 * W) * dispersion.det(k)
         return spectrum

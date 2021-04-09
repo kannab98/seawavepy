@@ -4,32 +4,34 @@ import math
 
 
 import numpy as np
-from seawave import rc, kernel
+from seawave import rc, kernel, config
 from numba import cuda
 import xarray as xr
 from seawave.radar import radar
 import seawave.surface as srf
-from seawave.surface  import dataset, surface
+from seawave.surface  import dataset, surface, wind, stat
+from seawave.spectrum import spectrum
+from seawave.spectrum.module import dispersion
 import matplotlib.pyplot as plt
+from scipy.signal import welch
 
 
 
-rc.surface.gridSize = [128, 128]
-rc.surface.kSize = 1024
-rc.surface.phiSize = 128
 
+config["Surface"]["LimitsOfModeling"][0] = [0, 1000]
+config['Surface']['GridSize'] = [12, 11]
+config['Surface']['ThreadPerBlock'] = [16, 16, 1]
 
+x = np.linspace(*config["Surface"]["LimitsOfModeling"][0], config['Surface']['GridSize'][0])
+y = np.linspace(*config["Surface"]["LimitsOfModeling"][1], config['Surface']['GridSize'][1])
+fs = 2
+t = np.arange(0, 1, 1/fs, dtype=np.float32)
 
-x = np.linspace(*rc.surface.x, rc.surface.gridSize[0])
-y = np.linspace(*rc.surface.y, rc.surface.gridSize[1])
-t = np.array([0, 1], dtype=np.float64)
+ds = surface((x,y,t), config=config)
 
+print(ds)
+kernels = [wind, stat, radar, radar.power]
+for kernel in kernels:
+    kernel(ds)
 
-
-srf = dataset.float_surface(x,y,t)
-srf = surface(srf)
-srf = radar(srf)
-T = np.linspace(radar.find_tmin(srf), radar.find_tmax(srf), 256) 
-P = radar.power(srf, T)
-plt.plot(T,P)
-plt.savefig("example_pulse.png")
+print(ds)

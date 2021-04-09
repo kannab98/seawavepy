@@ -5,15 +5,19 @@ import matplotlib.pyplot as plt
 import os
 
 from ..surface import surface, dataset
-from .. import rc, kernel, cuda, DATADIR
+from .. import config
 
-from numba import njit, jit, prange, guvectorize
+from numba import njit, jit, prange, guvectorize, cuda
 import scipy as sp
 import pandas as pd
 import xarray as xr
+import math
 
 logger = logging.getLogger(__name__)
 
+
+c =  config["Constants"]["WaveSpeed"]
+timp = config["Radar"]['ImpulseDuration']
 
 class __radar__():
 
@@ -29,7 +33,7 @@ class __radar__():
         return srf
 
     def __init__(self, ):
-        self._gamma = 2*np.sin(rc.antenna.gainWidth/2)**2/np.log(2)
+        self._gamma = 2*np.sin(config['Radar']['GainWidth']/2)**2/np.log(2)
 
     
     @staticmethod
@@ -98,7 +102,6 @@ class __radar__():
         d = srf['distance'].values
         n = srf['normal'].values
         r = np.array([srf['X'], srf['Y'], srf['Z']])
-        rc.antenna.deviation = xi
 
         AoA = srf.elevations.copy()
         prod = np.einsum('ijkm, ijkm -> jkm', r/d, n)
@@ -110,118 +113,75 @@ class __radar__():
         srf['AoA'] = AoA
 
     
-    def power(self, srf, t):
-        c =  rc.constants.lightSpeed
-        timp = rc.antenna.impulseDuration
-        G = self.gain(srf['AoD'], rc.antenna.deviation)
-        self.angle_of_arrival(srf, xi=rc.antenna.deviation)
+    def power(self, srf, t=None):
+
+
+        G = self.gain(srf['AoD'], config['Radar']['Direction'][1])
+        # self.angle_of_arrival(srf)
         d = srf['distance'].values
         AoA = srf['AoA'].values
  
 
 
-        P = np.zeros((t.size, *d.shape), dtype=float)
-        numba_power(t, d, G, AoA, P)
-        P = np.sum(P**2/2, axis=(1,2))
+        if t == None:
+            t = np.arange(self.find_tmin(srf), self.find_tmax(srf), timp/4) 
+
+
+        # P = np.zeros((t.size, *d.shape), dtype=float)
 
 
 
+        # numba_power(t, d, G, AoA, P)
+        # P = np.sum(P**2/2, axis=(-1, -2))
+
+        threadsperblock = (16,16)
+        sizes = (t.size, d.shape[0])
+        P = np.zeros((t.size, d.shape[0]), dtype=float)
+
+        blockspergrid = tuple( math.ceil(sizes[i] / threadsperblock[i])  for i in range(len(threadsperblock)))
+        cuda_power[blockspergrid, threadsperblock](t, d, G, AoA, P)
+
+        srf['pulse'] = dataset.pulse(P, srf['time'], t)
 
         return P
 
     
     def find_rho(self, srf):
+        z = config['Radar']['Position'][-1]
         sigmaxx = srf['VoS'].values[0,:].max()
-        theta = lambda rho: np.arctan(rho/rc.antenna.z)
-        Wxx = lambda x: 1/np.sqrt(2*np.pi*sigmaxx**2) * np.exp(-x**2/(2*sigmaxx**2))
+        theta = lambda rho: np.arctan(rho/z)
+        xmax = config["Surface"]["LimitsOfModeling"][0][1]
+        
         eps = np.deg2rad(1)
+        if sigmaxx != 0:
+            Wxx = lambda x: 1/np.sqrt(2*np.pi*sigmaxx**2) * np.exp(-x**2/(2*sigmaxx**2))
+            probality = 1.49e-16 # вероятность того, что наклон примет значение theta
+            F = lambda rho: sp.integrate.quad(Wxx, a=np.tan(theta(rho)-eps), b=np.tan(theta(rho)+eps))[0] - probality
+            try:
+                root = sp.optimize.root_scalar(F, bracket=[0, xmax]).root
+            except:
+                root = xmax/2
 
-
-        probality = 1.49e-16 # вероятность того, что наклон примет значение theta
-        F = lambda rho: sp.integrate.quad(Wxx, a=np.tan(theta(rho)-eps), b=np.tan(theta(rho)+eps))[0] - probality
-
-        return sp.optimize.root_scalar(F, bracket=[0, rc.surface.x[1]]).root
+            return root
+        else: return xmax/2
     
     def find_tmax(self, srf):
-
-        tmax = np.sqrt(self.find_rho(srf)**2 + (rc.antenna.z-srf['elevations'].min())**2)/rc.constants.lightSpeed
+        z = config['Radar']['Position'][-1]
+        c = config['Constants']['WaveSpeed']
+        tmax = np.sqrt(self.find_rho(srf)**2 + (z-srf['elevations'].min())**2)/c
         return 1.04*tmax
 
 
     def find_tmin(self, srf):
-        tmin = (rc.antenna.z - srf['elevations'].max())/rc.constants.lightSpeed 
+        z = config['Radar']['Position'][-1]
+        c = config['Constants']['WaveSpeed']
+        tmin = (z - srf['elevations'].max())/c
         return tmin*0.99
 
-    def create_multiple_pulses(self, N, t=None, dump=False):
-        P = 0
-
-        data = np.zeros((256, N+1), dtype=float)
-
-        for i in range(N):
-            srf = kernel.simple_launch(cuda.default)
-            surface.data = srf
-            t = np.linspace(self.find_tmin(), self.find_tmax(), data.shape[0])
-            Pn = self.power(t)
-            data[:, i] = Pn
-            P += Pn
-
-        
-        data[:, -1] = P/N
-        data[:, -1] += 1e-1*data[:, -1].max()*np.random.rand(data[:, -1].size)
-
-        if dump:
-            with pd.ExcelWriter(os.path.join(DATADIR,'impulses.xlsx'), engine="xlsxwriter") as writer:
-                for i in range(N):
-                    df = pd.DataFrame({'t': t, 'P': data[:, i] })
-                    df.to_excel(writer, sheet_name='impulse%d' % i)
-                
-                df = pd.DataFrame({'t': t, 'P': data[:, -1]})
-                df.to_excel(writer, sheet_name='impulse_mean')
-
-                dt = {}
-                for Key, Value in vars(rc).items():
-                    # if type(Value) ==  type(rc.surface):
-                    dt.update({Key: {}})
-                    for key, value in Value.__dict__.items():
-                        if key[0] != "_":
-                            dt[Key].update({key: value})
-
-                df = pd.DataFrame(dt)
-                df.to_excel(writer, sheet_name='config')
-            
-            if rc.dump.plot:
-                fig, ax = plt.subplots()
-                ax.plot(t, data[:, -1])
-                fig.savefig(os.path.join(DATADIR, 'mean_pulse.png'))
-
-        return data[:, -1], 2*t
-
-    def crossSection(self, theta):
-        # Эти штуки не зависят от ДН антенны, только от геометрии
-        # ind = self.sort(self.localIncidence)
-        # Rabs = self._Rabs[ind]
-        # R = R[:,index]
-        self.geometryUpdate()
-        # gamma = 2*np.sin(np.deg2rad(15)/2)**2/np.log(2)
-
-        # G = self.G(self._R, np.pi/2, theta, gamma)
-
-        N = np.zeros_like(theta, dtype=float)
-        for i, xi in enumerate(theta):
-            theta0 = self.localIncidence(xi=xi)
-
-            ind = self.sort(theta0, xi=xi)
-            # N[i] = np.sum(G[i][ind])
-            N[i] = ind[0].size
 
 
-        # # Эти, разумеется, зависят
 
 
-        # E0 = G**2/R**2*cos
-
-
-        return N
 
     
 
@@ -230,12 +190,25 @@ class __radar__():
     "(n), (x,y,t), (x,y,t), (x,y,t) -> (n,x,y,t)", forceobj=True, target='parallel'
 )
 def numba_power(t, Rabs, G, theta0, result, ):
-    timp = rc.antenna.impulseDuration
-    c = rc.constants.lightSpeed
     tau = Rabs / c
     t = np.expand_dims(t, axis=(0,1,2) ).T
-    mask = (0 <= t - tau) & (t - tau <= timp) & (theta0 <= np.deg2rad(1))
-    np.power(G/Rabs, 2, where=mask, out=result)
+
+    anglemask = ( np.abs(np.arccos(np.cos(theta0)) ) <= np.deg2rad(1) )
+    timemask = (0 <= t - tau) & (t - tau <= timp) 
+
+    np.power(G/Rabs, 2, where=anglemask & timemask, out=result)
     return result
 
 
+@cuda.jit
+def cuda_power(t, Rabs, G, theta0, result):
+    n, m = cuda.grid(2)
+    if m > t.size or n > Rabs.shape[0]:
+        return
+
+    for i in range(Rabs.shape[1]):
+        for j in range(Rabs.shape[2]):
+            tau = Rabs[n, i, j]/c
+            timemask = (0 <= t[m] - tau) & (t[m] - tau <= timp)
+            if timemask:
+                result[m, n] += (G[n, i, j]/Rabs[n, i, j])**4/2

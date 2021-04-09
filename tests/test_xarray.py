@@ -8,7 +8,7 @@ from seawave import rc, kernel
 from numba import cuda
 import xarray as xr
 from seawave.radar import radar
-import seawave.surface as srf
+import seawave.surface 
 from seawave.surface  import dataset, surface
 
 
@@ -25,7 +25,11 @@ t = np.array([0, 1], dtype=np.float64)
 
 
 # floatsrf = srf.float_surface((x,y,t))
-roughsrf = srf.rough_surface((x,y,t))
+roughsrf = seawave.surface.rough_surface((x,y,t))
+srf = surface(roughsrf)
+# srf = radar(srf)
+print(srf)
+
 # rs = rs.assign_coords({'k': (['kx','ky'], rs.harmonics)}).coords
 # print(roughsrf)
 # rs = rs.set_coords(['k'])

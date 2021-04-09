@@ -1,25 +1,28 @@
 import numpy as np
 import xarray as xr
 
-from .. import rc
+from .. import config
 
 datasets = []
 
 
 def slopes(x: np.ndarray, y: np.ndarray, z: np.ndarray, t: np.ndarray, ):
 
-    arr = np.zeros((3, x.size, y.size, t.size))
+    arr = np.zeros((3, t.size, x.size, y.size))
     arr[-1] = 1
-    X, Y, T = np.meshgrid(x, y, t)
+
+    X, Y, _ = np.meshgrid(x, y, t)
+    X = np.transpose(X, axes=(2,1,0))
+    Y = np.transpose(Y, axes=(2,1,0))
 
     da = xr.DataArray(
         data=arr,
-        dims=["proj", "x", "y", "time"],
+        dims=["proj", "time", "x", "y"],
         coords=dict(
             proj=["x", "y", "z"],
-            X=(["x", "y", "time"], X),
-            Y=(["x", "y", "time"], Y),
-            Z=(["x", "y", "time"], z),
+            X=(["time", "x", "y"], X),
+            Y=(["time", "x", "y"], Y),
+            Z=(["time", "x", "y"], z),
             time=t,
         ),
         attrs=dict(
@@ -31,17 +34,19 @@ def slopes(x: np.ndarray, y: np.ndarray, z: np.ndarray, t: np.ndarray, ):
 
 def velocities(x: np.ndarray, y: np.ndarray, z: np.ndarray, t: np.ndarray, ):
 
-    arr = np.zeros((3, x.size, y.size, t.size))
-    X, Y, T = np.meshgrid(x, y, t)
+    arr = np.zeros((3, t.size, x.size, y.size))
+    X, Y, _ = np.meshgrid(x, y, t)
+    X = np.transpose(X, axes=(2,1,0))
+    Y = np.transpose(Y, axes=(2,1,0))
 
     da = xr.DataArray(
         data=arr,
-        dims=["proj", "x", "y", "time"],
+        dims=["proj", "time", "x", "y"],
         coords=dict(
             proj=["x", "y", "z"],
-            X=(["x", "y", "time"], X),
-            Y=(["x", "y", "time"], Y),
-            Z=(["x", "y", "time"], z),
+            X=(["time", "x", "y"], X),
+            Y=(["time", "x", "y"], Y),
+            Z=(["time", "x", "y"], z),
             time=t,
         ),
         attrs=dict(
@@ -52,17 +57,41 @@ def velocities(x: np.ndarray, y: np.ndarray, z: np.ndarray, t: np.ndarray, ):
     )
     return da
 
+def harmonics(N: int, M: int):
+    da = xr.DataArray(data=np.zeros((N, M), dtype=np.float32), 
+                        dims=["k", "phi"], 
+                        coords=dict(
+                        k = np.zeros(N),
+                        phi = np.zeros(M),
+        ))
+    return da
+
+def phases(N: int, M: int):
+    da = xr.DataArray(data=np.zeros((N, M), dtype=np.float32), 
+                        dims=["k", "phi"], 
+                        coords=dict(
+                        k = np.zeros(N),
+                        phi = np.zeros(M),
+        ))
+    return da
+
+
 def elevations(x: np.ndarray, y: np.ndarray, t: np.ndarray):
-    arr = np.zeros((x.size, y.size, t.size))
-    X, Y, T = np.meshgrid(x, y, t)
+
+    X, Y, _ = np.meshgrid(x, y, t)
     k = np.array([[]],dtype=object)
+    X = np.transpose(X, axes=(2,1,0))
+    Y = np.transpose(Y, axes=(2,1,0))
+
+
+    arr = np.zeros(X.shape)
 
     da = xr.DataArray(
         data=arr,
-        dims=["x", "y", "time"],
+        dims=["time", "x", "y"],
         coords=dict(
-            X=(["x", "y", "time"], X),
-            Y=(["x", "y", "time"], Y),
+            X=(["time", "x", "y"], X),
+            Y=(["time", "x", "y"], Y),
             time=t,
 
         ),
@@ -99,16 +128,30 @@ def float_surface(x: np.ndarray, y: np.ndarray, t: np.ndarray, ):
     ds = xr.Dataset( {'elevations': z, 'slopes': n, 'velocities':v, 'spectrum': xr.DataArray()} )
     return ds
 
+def restore_z(srf):
+    P = srf['pulse'].values
+    t = srf['time_relative'].values
+    timp = config['Radar']['ImpulseDuration']
+    c = config['Constants']['WaveSpeed']
+
+    imax = np.argmax(P, axis=0)
+    z = (t[imax] - timp/4) * c
+    srf['z_restored'] = xr.DataArray(
+        data=z,
+        dims = ["time"],
+        coords = dict(time = srf['time'].values),
+    )
+    return z
+
 def rough_surface(host_constants, *args):
     ds = float_surface(*args)
     ds['spectrum'] = spectrum(*host_constants)
     return ds
 
 def radar(srf: xr.Dataset):
-    srf.coords["X"] += rc.antenna.x
-    srf.coords["Y"] += rc.antenna.y
-    srf.coords["Z"] = srf['elevations'] + rc.antenna.z
-
+    srf.coords["X"] += config['Radar']['Position'][0]
+    srf.coords["Y"] += config['Radar']['Position'][1]
+    srf.coords["Z"] = srf['elevations'] + config['Radar']['Position'][2]
 
     r = np.array([srf['X'], srf['Y'], srf['Z']])
 
@@ -162,8 +205,9 @@ def pulse(P: np.ndarray, t: np.ndarray, time_relative: np.ndarray):
     return da
 
 def statistics(srf: xr.Dataset) -> xr.Dataset:
+
     varelev = xr.DataArray(
-        data   = np.var(srf['elevations'].values, axis=(0,1)),
+        data   = np.var(srf['elevations'].values, axis=(-1, -2)),
         dims   = ["time"],
         coords = dict(
             time = srf['time'].values
@@ -175,7 +219,7 @@ def statistics(srf: xr.Dataset) -> xr.Dataset:
     )
 
     meanelev = xr.DataArray(
-        data   =  np.mean(srf['elevations'].values, axis=(0,1)),
+        data   =  np.mean(srf['elevations'].values, axis=(-1, -2)),
         dims   = ["time"],
         coords = dict(
             time = srf['time'].values
@@ -186,9 +230,10 @@ def statistics(srf: xr.Dataset) -> xr.Dataset:
     )
 
 
+    print(srf.slopes.values.shape)
     varslopes = xr.DataArray(
-        data   = np.var(srf['slopes'].values, axis=(1,2)),
-        dims   = ["proj","time"],
+        data   = np.var(srf['slopes'].values, axis=(-1, -2)),
+        dims   = ["proj", "time"],
         coords = dict(
             time = srf['time'].values
         ),

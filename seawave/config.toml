@@ -1,0 +1,52 @@
+[Swell]
+Enable = false
+# Направление зыби
+Direction = 120 # град
+# Скорость  приповерхностного ветра при котором создалась зыбь
+Speed = 15 # м/с
+
+[Wind]
+Enable = true
+Direction = 45
+# Скорость  приповерхностного ветра
+Speed = 5 # м/с
+
+[Constants]
+# Скорость распространения волны (световой, звуковой) в среде
+WaveSpeed = 1500 # м/с
+EarthRadius  =  6370e3 # м
+GravityAcceleration = 9.81
+
+[Surface]
+# Размер площадки моделирования формата [[x_min, x_max], [y_min, y_max]]
+LimitsOfModeling = [ [-15, 15] , [-15, 15] ]
+# Количество точек на сетке
+GridSize = [129, 129]
+Kernel = "default"
+RandomPhases = true
+# Количество гармоник по волновому числу в спектре
+WaveNumberSize = 1024
+# Количество гармоник по азимуту в спектре
+AzimuthSize = 128
+# Безразмерный ветровой разгон
+NonDimWindFetch = 20170
+Band = "Ku"
+ThreadPerBlock = [8, 8, 8]
+
+
+[Radar]
+WaveLength = "Ku"
+# Ширина диаграммы направленности антенны на уровне -3dB по мощности
+GainWidth = 15 # град
+# Радиус-вектор радара
+Position = [0, 0, 30] # м
+# Направление в сферических координатах
+# Direction[0] -- Направление на центр диаграммы направленности в плоскости XY
+# Direction[1] -- Отклонение максимума диаграммы направленности от надира
+Direction = [0, 0]
+# Длительность излученного импульса
+ImpulseDuration = 4e-5 # с
+
+[Dataset]
+File = "database.nc"
+RetrackingFileName = "impulses.xlsx"

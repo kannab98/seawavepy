@@ -21,7 +21,7 @@ k, A = surface.export()
 from cmath import exp
 
 
-srf = np.zeros((x.size, y.size, t.size) , dtype=np.complex128)
+srf = np.zeros(( x.size, y.size, t.size) , dtype=np.complex128)
 
 import time
 start = time.time()
