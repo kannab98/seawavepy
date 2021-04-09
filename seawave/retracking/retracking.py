@@ -11,7 +11,7 @@ from pandas import read_csv
 
 import numpy
 
-from  .. import rc #, spectrum, surface
+from  .. import config#, spectrum, surface
 
 import logging
 logger = logging.getLogger(__name__)
@@ -44,12 +44,12 @@ class __retracking__():
     """
     def __init__(self, **kwargs):
         # Скорость света/звука
-        self.c = rc.constants.lightSpeed
+        self.c = config['Constants']['WaveSpeed']
         # Длительность импульса в секундах
-        self.T = rc.antenna.impulseDuration
+        self.T = config['Radar']['ImpulseDuration']
 
 
-    def from_file(self, file):
+    def from_file(self, file, config):
         """
         Поиск импульсов в файлах по регулярному выражению. 
 
@@ -92,11 +92,12 @@ class __retracking__():
             df.iloc[i][0] = self.swh(df.iloc[i]["Sigma"])
             df.iloc[i][1] = self.height(df.iloc[i]["Epoch"])
 
-        excel_name = os.path.join(path, "output.xlsx")
+        excel_name = os.path.join(path, config['Dataset']['RetrackingFileName'])
 
         df.to_excel(excel_name, sheet_name='brown')
 
         with pd.ExcelWriter(excel_name, mode='a', engine='openpyxl') as writer:  
+            print(excel_name)
             df0.to_excel(writer, sheet_name='raw')
 
         return df0, df
@@ -208,9 +209,9 @@ class __retracking__():
         Вычисление высоты значительного волнения
         """
         # Скорость света/звука [м/с]
-        c = rc.constants.lightSpeed
+        c = self.c
         # Длительность импульса [с]
-        T = rc.antenna.impulseDuration
+        T = self.T
 
         sigma_p = 0.425 * T
         sigma_c = sigma_l/np.sqrt(2)
@@ -223,10 +224,11 @@ class __retracking__():
         """
 
         # Скорость света/звука [м/с]
-        c = rc.constants.lightSpeed
+        c = self.c
         return tau*c/2
 
-    def emb(self, swh, U10, dtype = "Rostov"):
+    @staticmethod
+    def emb(swh, U10, dtype = "Rostov"):
         """
         Поправка на состояние морской поверхности (ЭМ-смещение)
         """

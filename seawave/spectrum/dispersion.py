@@ -1,4 +1,7 @@
+from .. import config 
+import numpy as np 
 
+g = config['Constants']['GravityAcceleration']
 class dispersion:
     # коэффициенты полинома при степенях k
     p = [74e-6, 0, g, 0]

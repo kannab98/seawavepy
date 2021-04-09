@@ -1,15 +1,9 @@
+import toml
 import sys
 sys.path.append(".")
-import unittest
-
-import seawave
-from seawave import rcParams
-
-seawave.rc = rcParams('/home/ponur/modeling-git/rc.json')
-# class TestrcParams(unittest.TestCase):
-#     def setUp(self):
-#         self.rc = rc
+from seawave import config
 
 
-# if __name__=="__main__":
-#     unittest.main()
+# config = toml.load("seawave/config.toml")
+
+print(config)

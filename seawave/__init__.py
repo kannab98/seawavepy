@@ -1,7 +1,7 @@
 from json import load
 import logging
 import sys, os
-import xarray as xr
+import toml
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -89,6 +89,9 @@ DATADIR = ""
 #     if not os.path.exists(prefix + suffix):
 #         os.makedirs(prefix + suffix)
 #         DATADIR = prefix + suffix
+configfile = os.path.join(os.path.dirname(__file__), 'config.toml')
+
+config = toml.load(configfile)
 
 fh = logging.FileHandler('modeling.log')
 fh.setFormatter(formatter)

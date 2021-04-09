@@ -3,14 +3,11 @@ from numpy import pi
 from scipy import interpolate, integrate
 import scipy as sp
 import pandas as pd
-from multiprocessing import Array, Process, Pool, cpu_count
-from itertools import product
-
-from .. import rc, DATADIR
+from .. import rc, config
 from .. import dataset as ds 
 from . import dataset
 from ..spectrum import spectrum
-from numba import cuda, float32
+from numba import cuda, float32, guvectorize
 # from .. import cuda
 import math
 from cmath import exp, phase
@@ -22,7 +19,9 @@ import matplotlib.pyplot as plt
 import os
 import atexit
 
-g = rc.constants.gravityAcceleration
+
+device = cuda.get_current_device()
+g = config['Constants']['GravityAcceleration']
 
 @cuda.jit(device=True)
 def dispersion(k):
@@ -30,13 +29,13 @@ def dispersion(k):
     return math.sqrt(g*k + 74e-6*k**3)
 
 @cuda.jit
-def default(ans, x, y, t, k, A):
+def default(out, x, y, t, k, A):
     i, j, n = cuda.grid(3)
 
     surface = cuda.local.array(6, float32)
     surface = base(surface, x[i], y[j], t[n], k, A)
     for m in range(6):
-        ans[m, i, j, n] = surface[m]
+        out[m, n, i, j] = surface[m]
 
 
 @cuda.jit(device=True)
@@ -46,7 +45,7 @@ def base(surface, x, y, t, k, A):
         for m in range(k.shape[1]):
                 kr = k[n,m].real*x + k[n,m].imag*y
                 w = dispersion(k[n,m])
-                e = A[n,m] * exp(1j*kr[n,m])  * exp(1j*w*t)
+                e = A[n,m] * exp(1j*kr)  * exp(1j*w*t)
 
                 # Высоты (z)
                 surface[0] +=  +e.real
@@ -118,9 +117,9 @@ class __surface__(object):
         self._y = np.linspace(*rc.surface.y, rc.surface.gridSize[1])
         self._t = np.array([0, 1])
 
-        srf = dataset.float_surface(self._x, self._y, self._t)
-        self._n = np.frombuffer(srf.slopes.data).reshape(srf.slopes.data.shape)
-        self._v = np.frombuffer(srf.velocities.data).reshape(srf.velocities.data.shape)
+        # srf = dataset.float_surface(self._x, self._y, self._t)
+        # self._n = np.frombuffer(srf.slopes.data).reshape(srf.slopes.data.shape)
+        # self._v = np.frombuffer(srf.velocities.data).reshape(srf.velocities.data.shape)
 
 
 
@@ -148,25 +147,6 @@ class __surface__(object):
     
     # def cwmCorrection(self, moments):
         
-
-    @staticmethod
-    def cross_section(theta, cov): 
-        # theta = Surface.angle_correction(theta)
-        theta = theta[np.newaxis]
-        # Коэффициент Френеля
-        F = 0.8
-
-        if len(cov.shape) <= 2:
-            cov = np.array([cov])
-
-        K = np.zeros(cov.shape[0])
-        for i in range(K.size):
-            K[i] = np.linalg.det(cov[i])
-
-        sigma =  F**2/( 2*np.cos(theta.T)**4 * np.sqrt(K) )
-        sigma *= np.exp( - np.tan(theta.T)**2 * cov[:, 1, 1]/(2*K))
-        return sigma
-
 
 
 
@@ -206,16 +186,15 @@ class __surface__(object):
         return k, A0*np.exp(1j*self.psi)
     
     def __call__(self, srf, kernel=default):
+        # host_constants = srf.spectrum()
         host_constants = self.export()
-        srf['spectrum'] = dataset.spectrum(*host_constants)
+
         srf = init(srf, host_constants, kernel = default)
         dataset.statistics(srf)
 
         
-        exit_handler = lambda: srf.to_netcdf('kek.nc')
+        exit_handler = lambda: srf.to_netcdf('database.nc')
 
-
-    
         atexit.register(exit_handler)
 
         return srf
@@ -227,11 +206,40 @@ def init(srf: xr.Dataset, host_constants, kernel=default):
     y = srf.coords["y"].values
     t = srf.coords["time"].values
 
-    arr = np.stack([srf.elevations.values, *srf.velocities.values, *srf.slopes.values], axis=0)
+    z = srf.elevations.values
+    s = np.transpose(srf.slopes.values, (1, 0, 2, 3))
+    v = np.transpose(srf.velocities.values, (1, 0, 2, 3))
+
+    arr = np.stack([z, *v, *s], axis=0)
 
     cuda_constants = tuple(cuda.to_device(host_constants[i]) for i in range(len(host_constants)))
-    threadsperblock = (8, 8, 4)
-    sizes = (x.size, y.size, t.size)
+
+
+
+    limit_per_dim = np.array([
+        device.MAX_BLOCK_DIM_X,
+        device.MAX_BLOCK_DIM_Y,
+        device.MAX_BLOCK_DIM_Z,
+    ])
+    limit = int(device.MAX_THREADS_PER_BLOCK)
+
+
+
+
+    threadsperblock = np.array([8, 8, 8], dtype=int)
+    sizes = np.array([x.size, y.size, t.size], dtype=int)
+
+    if sizes[0]==1 and sizes[1]==1:
+        threadsperblock = np.array([1, 1, limit_per_dim[2]], dtype=int)
+
+    elif sizes[1]==1 and sizes[2]==1:
+        threadsperblock = np.array([limit_per_dim[0], 1, 1], dtype=int)
+
+    elif sizes[0]==1 and sizes[2]==1:
+        threadsperblock = np.array([1,limit_per_dim[0], 1], dtype=int)
+
+    threadsperblock = tuple(threadsperblock)
+
     blockspergrid = tuple( math.ceil(sizes[i] / threadsperblock[i]) for i in range(len(threadsperblock)))
 
     x0 = cuda.to_device(x)
@@ -242,21 +250,36 @@ def init(srf: xr.Dataset, host_constants, kernel=default):
 
     srf.elevations.values = arr[0]
     srf.coords['Z'].values = arr[0]
-    srf.velocities.values = arr[1:4]
-    srf.slopes.values = arr[4:7]
+    srf.velocities.values = np.transpose(arr[1:4], axes=(1, 0, 2, 3))
+    srf.slopes.values = np.transpose(arr[4:7], axes=(1, 0, 2, 3))
 
     return srf
 
 
+def __call__(self, srf, kernel=default):
+    host_constants = srf.spectrum()
+    # host_constants = self.export()
+
+    srf = init(srf, host_constants, kernel = default)
+    dataset.statistics(srf)
 
     
+    # exit_handler = lambda: srf.to_netcdf('database.nc')
 
-class float_surface():
-    def __call__(self, *args):
-        dataset.float_surface()
+    atexit.register(exit_handler, srf)
 
-    def __init__(self, ):
-        pass 
+    return srf
+
+
+def exit_handler(srf):
+
+    print('kek')
+    for coord in ['X', 'Y']:
+        print('kek')
+        if np.allclose(srf[coord].values[0,:,:], srf[coord].values):
+            srf[coord] = (["x", "y"], srf[coord].values[0,:,:]) 
+
+    srf.to_netcdf('database.nc')
 
 
 

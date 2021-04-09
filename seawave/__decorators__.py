@@ -1,4 +1,4 @@
-from . import rc
+from . import rc, config
 import numpy as np
 # from .spectrum import spectrum
 
@@ -43,10 +43,10 @@ def spectrum_dispatcher():
             # self = spectrum
             self = args[0]
             if dispatcher:
-                x = rc.surface.nonDimWindFetch
-                U = rc.wind.speed
-                band = rc.surface.band
-                waveLength = rc.antenna.waveLength
+                x = config['Surface']['NonDimWindFetch']
+                U = config['Wind']['Speed']
+                band = config['Surface']['Band']
+                waveLength = config['Radar']['WaveLength']
 
                 if self._x != x or self._U != U or self._band != band or self.peak == None or \
                 (self._wavelength != waveLength and radar_dispatcher):
