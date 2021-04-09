@@ -77,6 +77,7 @@ class __retracking__():
                 _files_ += rx.findall(tmpfile)
 
 
+        print(_files_)
         columns = pd.MultiIndex.from_product([ _files_, ["t", "P"] ], names=["file", "data"])
         df0 = pd.DataFrame(columns=columns)
 
@@ -93,7 +94,7 @@ class __retracking__():
             df.iloc[i][0] = self.swh(df.iloc[i]["Sigma"])
             df.iloc[i][1] = self.height(df.iloc[i]["Epoch"])
 
-        excel_name = os.path.join(path, config['Dataset']['RetrackingFileName'])
+        excel_name = os.path.join(config['Dataset']['RetrackingFileName'])
 
         df.to_excel(excel_name, sheet_name='brown')
 
