@@ -73,7 +73,8 @@ class __retracking__():
         _files_ = []
         for root, dirs, files in os.walk(path):
             for file in files:
-                _files_ += rx.findall(file)
+                tmpfile = os.path.join(root,file)
+                _files_ += rx.findall(tmpfile)
 
 
         columns = pd.MultiIndex.from_product([ _files_, ["t", "P"] ], names=["file", "data"])
