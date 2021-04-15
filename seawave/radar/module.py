@@ -123,23 +123,20 @@ class __radar__():
  
 
 
-        if t == None:
+        if np.isnan(t).any() == None:
             t = np.arange(self.find_tmin(srf), self.find_tmax(srf), timp/4) 
+        
 
+        P = np.zeros((t.size, *d.shape), dtype=float)
+        numba_power(t, d, G, AoA, P)
+        P = np.sum(P**2/2, axis=(-1, -2))
 
-        # P = np.zeros((t.size, *d.shape), dtype=float)
+        # threadsperblock = (16,16)
+        # sizes = (t.size, d.shape[0])
+        # P = np.zeros((t.size, d.shape[0]), dtype=float)
 
-
-
-        # numba_power(t, d, G, AoA, P)
-        # P = np.sum(P**2/2, axis=(-1, -2))
-
-        threadsperblock = (16,16)
-        sizes = (t.size, d.shape[0])
-        P = np.zeros((t.size, d.shape[0]), dtype=float)
-
-        blockspergrid = tuple( math.ceil(sizes[i] / threadsperblock[i])  for i in range(len(threadsperblock)))
-        cuda_power[blockspergrid, threadsperblock](t, d, G, AoA, P)
+        # blockspergrid = tuple( math.ceil(sizes[i] / threadsperblock[i])  for i in range(len(threadsperblock)))
+        # cuda_power[blockspergrid, threadsperblock](t, d, G, AoA, P)
 
         srf['pulse'] = dataset.pulse(P, srf['time'], t)
 

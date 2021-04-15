@@ -1,44 +1,49 @@
-
+from .. import config
+import numpy as np
+from ..spectrum import spectrum
+from scipy.special import erf
 
 class brown():
 
-    def __init__(self):
+    def __init__(self, config):
 
-        theta = np.deg2rad(rc.antenna.gainWidth)
+        theta = np.deg2rad(config['Radar']['GainWidth'])
         self.Gamma = self.gamma(theta)
 
     def t(self):
-        T = rc.antenna.impulseDuration
+        T = config['Radar']['ImpulseDuration']
         return np.linspace(-10*T, 25*T, 1000)
 
     @staticmethod
     def H(h):
-        R = rc.constants.earthRadius
+        R = config['Constants']['EarthRadius']
         return h * ( 1 + h/R )
     
     @staticmethod
     def A(gamma, A0=1.):
-        xi = np.deg2rad(rc.antenna.deviation)
+        xi = np.deg2rad(config['Radar']['Direction'][1])
         return A0*np.exp(-4/gamma * np.sin(xi)**2 )
 
     @staticmethod
     def u(t, alpha, sigma_c, cwm_mean = 0, cwm_var = 0):
-        c = rc.constants.lightSpeed
+        c = config['Constants']['WaveSpeed']
         return (t - alpha * sigma_c**2 - cwm_mean/c) / (np.sqrt(2) * sigma_c)
 
     @staticmethod
     def v(t, alpha, sigma_c, cwm_mean = 0, cwm_var = 0):
-        c = rc.constants.lightSpeed
+        c = config['Constants']['WaveSpeed']
         return alpha * (t - alpha/2 * sigma_c**2 - cwm_mean/c)
 
     @staticmethod
     def alpha(beta,delta):
+        xi = np.deg2rad(config['Radar']['Direction'][1])
+        c = config['Constants']['WaveSpeed']
         return delta - beta**2/4
 
     def delta(self, gamma):
-        c = rc.constants.lightSpeed
-        xi = np.deg2rad(rc.antenna.deviation)
-        h = rc.antenna.z
+        h = config['Radar']['Position'][2]
+        c = config['Constants']['WaveSpeed']
+        xi = np.deg2rad(config['Radar']['Direction'][1])
         return 4/gamma * c/self.H(h) * np.cos(2 * xi)
     
     @staticmethod
@@ -46,15 +51,15 @@ class brown():
         return 2*np.sin(theta/2)**2/np.log(2)
 
     def beta(self, gamma):
-        c = rc.constants.lightSpeed
-        xi = np.deg2rad(rc.antenna.deviation)
-        h = rc.antenna.z
+        c = config['Constants']['WaveSpeed']
+        xi = np.deg2rad(config['Radar']['Direction'][1])
+        h = config['Radar']['Position'][2]
         return 4/gamma * np.sqrt( c/self.H(h) ) * np.sin( 2*xi )
 
     @staticmethod
     def sigma_c(sigma_s):
-        T = rc.antenna.impulseDuration
-        c = rc.constants.lightSpeed
+        c = config['Constants']['WaveSpeed']
+        T = config['Radar']['ImpulseDuration']
         sigma_p = 0.425 * T 
         return np.sqrt(sigma_p**2 + (2*sigma_s/c)**2 )
 
@@ -72,7 +77,6 @@ class brown():
 
 
         spec = spectrum
-        surf = surface
         sigma_s = spec.quad(0, 0)
         sigma_c = self.sigma_c(sigma_s)
 

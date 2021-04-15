@@ -10,15 +10,13 @@ from seawave.surface import dataset
 import matplotlib.pyplot as plt
 
 
-config["Surface"]["LimitsOfModeling"] = [[-100, 100], [-100, 100]]
+config["Surface"]["LimitsOfModeling"] = [[-15, 15], [-15, 15]]
 config['Surface']['GridSize'] = [512, 512]
 config['Surface']['ThreadPerBlock'] = [16, 16, 1]
-config['Radar']['Position'] = [0, 0, 30]
-config['Dataset']['File'] = "dataset_seminar_U15.nc"
+config['Radar']['Position'] = [0, 0, 28.3688]
+config['Dataset']['File'] = "dataset_impulses.nc"
 config['Wind']['Direction'] = 0
-config['Wind']['Speed'] = 5
-
-config['Wind']['Enable'] = True
+config['Wind']['Speed'] = 10.2
 
 
 
@@ -29,7 +27,7 @@ t = np.arange(0, 1, 1/fs, dtype=np.float32)
 
 ds = surface((x,y,t), config=config)
 
-kernels = [wind, stat, radar]
+kernels = [stat, radar, radar.power]
 for kernel in kernels:
     kernel(ds)
 

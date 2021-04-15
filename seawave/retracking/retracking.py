@@ -77,11 +77,11 @@ class __retracking__():
                 _files_ += rx.findall(tmpfile)
 
 
-        print(_files_)
+        # print(_files_)
         columns = pd.MultiIndex.from_product([ _files_, ["t", "P"] ], names=["file", "data"])
         df0 = pd.DataFrame(columns=columns)
 
-        df = pd.DataFrame(columns=["SWH", "H", "Amplitude", "Alpha", "Epoch", "Sigma", "Noise"], index=_files_)
+        df = pd.DataFrame(columns=["SWH", "H", "VarSlopes", "Amplitude", "Alpha", "Epoch", "Sigma", "Noise"], index=_files_)
 
         for i, f in enumerate(_files_):
             sr = pd.read_csv(os.path.join(path, f), sep="\s+", comment="#")
@@ -90,9 +90,15 @@ class __retracking__():
 
             popt = self.pulse(sr.iloc[:, 0].values, sr.iloc[:, 1].values)
 
-            df.iloc[i][2:] = popt
+            df.iloc[i][3:] = popt
             df.iloc[i][0] = self.swh(df.iloc[i]["Sigma"])
             df.iloc[i][1] = self.height(df.iloc[i]["Epoch"])
+
+            H = df.iloc[i]['H']
+
+            slopes_coeff = self.slopes_coeff(df.iloc[i]['Alpha'], H, self.c)
+            print(slopes_coeff, H, np.deg2rad(config['Radar']['GainWidth']))
+            df.iloc[i][2] = self.varslopes(slopes_coeff, H, np.deg2rad(config['Radar']['GainWidth']))
 
         excel_name = os.path.join(config['Dataset']['RetrackingFileName'])
 
@@ -174,7 +180,7 @@ class __retracking__():
         """
         return A * np.exp( -alpha * (t-tau) ) * (1 + erf( (t-tau)/sigma_l ) ) + T
 
-    def pulse(self, t, pulse, func=None):
+    def pulse(self, t, pulse, **kwargs):
 
         logger.debug('Start retracking')
         try:
@@ -190,18 +196,50 @@ class __retracking__():
             sigma_l = 1
             b = 0
 
+        p0 = [A, alpha, tau, sigma_l, b]
         popt = curve_fit(self.ice, 
                             xdata=t,
                             ydata=pulse,
-                            p0=[A, alpha, tau, sigma_l, b],
-                            # bounds = [0, np.inf]
+                            p0=p0,
+                            **kwargs
                         )[0]
         logger.info('Restore pulse parameters: h=%.4f, Hs=%.4f' % (self.height(popt[2]), self.swh(popt[3]) ))
         return popt 
 
-    #     h = rc.antenna.z
-    #     A = lambda var: 1/(2*var*h**2) + 5.52/(rc.antenna.beamWidth)
-    #     F1 = 
+    @staticmethod
+    def varslopes(slopes_coeff, H, delta):
+        return np.abs(1/ ( 2 * ( slopes_coeff * H**2 - 5.52/delta**2)  ))
+
+    @staticmethod
+    def slopes_coeff(alpha, H, c):
+        return alpha/(H*c)
+
+
+    def full_pulse(self, t, varelev, slopes_coeff, H, sigma0, t0, t_pulse=None, c=None):
+
+        # Программа Караева считает только F1
+        if t_pulse == None:
+            t_pulse = self.T
+
+        if c == None:
+            c = self.c
+
+        # t += H/c
+# (np.exp(slopes_coeff*H*c*t_pulse) - 1)
+        F1 =  np.exp(-slopes_coeff*H*c*(t-t0) + 2*varelev*slopes_coeff**2*H**2) * \
+            (1 - erf( slopes_coeff*H*np.sqrt(2*varelev) + (t_pulse - t + t0)*c/(2*np.sqrt(2*varelev))) )
+
+        # F2 = erf((t_pulse - t)*c/(2*np.sqrt(2*varelev))) +  erf(t*c/(2*np.sqrt(2*varelev)))
+
+        # F3 = np.exp(-slopes_coeff*H*c*t + 2*varelev*slopes_coeff**2*H**2) * \
+        #     (
+        #         erf( slopes_coeff*H*np.sqrt(2*varelev) + (t_pulse - t)*c/(2*np.sqrt(2*varelev)))
+        #         -
+        #         erf( slopes_coeff*H*np.sqrt(2*varelev) - t*c/(2*np.sqrt(2*varelev)))
+        #     )
+
+        return sigma0/2 * ( F1 )
+
 
 
     
@@ -219,6 +257,7 @@ class __retracking__():
         sigma_c = sigma_l/np.sqrt(2)
         sigma_s = np.sqrt((sigma_c**2 - sigma_p**2))*c/2
         return 4*sigma_s
+    
 
     def height(self, tau):
         """
