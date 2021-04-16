@@ -78,17 +78,19 @@ class __retracking__():
 
 
         # print(_files_)
-        columns = pd.MultiIndex.from_product([ _files_, ["t", "P"] ], names=["file", "data"])
+        columns = pd.MultiIndex.from_product([ _files_, ["t", "P", "P_retr"] ], names=["file", "data"])
         df0 = pd.DataFrame(columns=columns)
 
         df = pd.DataFrame(columns=["SWH", "H", "VarSlopes", "Amplitude", "Alpha", "Epoch", "Sigma", "Noise"], index=_files_)
 
         for i, f in enumerate(_files_):
             sr = pd.read_csv(os.path.join(path, f), sep="\s+", comment="#")
-            df0[f, "t"] = sr.iloc[:, 0]
-            df0[f, "P"] = sr.iloc[:, 1]
+
 
             popt = self.pulse(sr.iloc[:, 0].values, sr.iloc[:, 1].values)
+            df0[f, "t"] = sr.iloc[:, 0]
+            df0[f, "P"] = sr.iloc[:, 1]
+            df0[f, 'P_retr'] = self.ice(sr.iloc[:, 0], *popt)
 
             df.iloc[i][3:] = popt
             df.iloc[i][0] = self.swh(df.iloc[i]["Sigma"])
