@@ -12,10 +12,12 @@ from seawave.spectrum.module import dispersion
 import matplotlib.pyplot as plt
 
 config['Radar']['Position'] = [0, 0, 30]
+config['Dataset']['File'] = "dataset_test1.nc"
+config['Surface']["Kernel"] = ["CWM-grid"]
 
-ds = xr.open_dataset('database.nc')
+ds = xr.open_dataset('dataset.nc')
 
-kernels = [radar, radar.power]
+kernels = [wind]
 
 for kernel in kernels:
     kernel(ds)

@@ -30,23 +30,24 @@ varelev = (2/4)**2
 
 
 t = df['TEK'].values
+print(t)
 t = np.sort(np.append(t, 0))
 
 t0 = 0
 # t += t0
 F = retracking.full_pulse(t, slopes_coeff=slopes_coeffx, sigma0=1, t0=t0, varelev=varelev, H=H, t_pulse=50e-6, c=1500)
-popt = retracking.pulse(t, F)
-print(popt[1]/50/1500, 50, delta)
+# popt = retracking.pulse(t, F)
+# print(popt[1]/50/1500, 50, delta)
 # print(retracking.varslopes(popt[1]/50/1500, 50, delta))
-popt = retracking.pulse(t, F)
+# popt = retracking.pulse(t, F)
 # print(popt)
 
 
 
-# # plt.plot(df['TEK'], df['IMP1_NEW']/df['IMP1_NEW'].max())
-# # plt.plot(df['TEK'], df['IMP1']/df['IMP1'].max())
+plt.plot(df['TEK'], df['IMP1_NEW']/df['IMP1_NEW'].max())
+# plt.plot(df['TEK'], df['IMP1']/df['IMP1'].max())
 # # F = F/F.max()
-# plt.plot(t, F/F.max())
+plt.plot(t, F/F.max())
 
 # # print(t[np.where(F==1)]-4*50e-6)
-# plt.savefig('kek')
+plt.savefig('kek')

@@ -12,12 +12,13 @@ class brown():
 
     def t(self):
         T = config['Radar']['ImpulseDuration']
-        return np.linspace(-10*T, 25*T, 1000)
+        return np.linspace(-10*T, 100*T, 1000)
 
     @staticmethod
     def H(h):
         R = config['Constants']['EarthRadius']
-        return h * ( 1 + h/R )
+        # return h * ( 1 + h/R )
+        return h
     
     @staticmethod
     def A(gamma, A0=1.):
@@ -41,7 +42,8 @@ class brown():
         return delta - beta**2/4
 
     def delta(self, gamma):
-        h = config['Radar']['Position'][2]
+        h = np.abs(config['Radar']['Position'][2])
+
         c = config['Constants']['WaveSpeed']
         xi = np.deg2rad(config['Radar']['Direction'][1])
         return 4/gamma * c/self.H(h) * np.cos(2 * xi)
@@ -53,7 +55,7 @@ class brown():
     def beta(self, gamma):
         c = config['Constants']['WaveSpeed']
         xi = np.deg2rad(config['Radar']['Direction'][1])
-        h = config['Radar']['Position'][2]
+        h = np.abs(config['Radar']['Position'][2])
         return 4/gamma * np.sqrt( c/self.H(h) ) * np.sin( 2*xi )
 
     @staticmethod
@@ -66,6 +68,7 @@ class brown():
     def pulse(self, t, dim = 1, cwm=False):
 
         self.dim = dim
+        print(config["Radar"]["GainWidth"])
         gamma = self.Gamma
         delta = self.delta(gamma)
         beta  = self.beta(gamma)
@@ -77,15 +80,16 @@ class brown():
 
 
         spec = spectrum
-        sigma_s = spec.quad(0, 0)
+        sigma_s = np.sqrt(spec.quad(0, 0))
         sigma_c = self.sigma_c(sigma_s)
 
         cwm_mean = 0
 
         if cwm == True:
 
-            cwm_mean = spec.quad(1)
-            sigma_s = spec.quad(0) - cwm_mean
+            s = np.sign(config["Radar"]["Position"][2])
+            cwm_mean = s*spec.quad(1, 0)
+            sigma_s = spec.quad(0, 0) - cwm_mean**2
             sigma_c = self.sigma_c(sigma_s)
 
 

@@ -92,6 +92,8 @@ def elevations(x: np.ndarray, y: np.ndarray, t: np.ndarray):
         coords=dict(
             X=(["time", "x", "y"], X),
             Y=(["time", "x", "y"], Y),
+            x = x, 
+            y = y,
             time=t,
 
         ),

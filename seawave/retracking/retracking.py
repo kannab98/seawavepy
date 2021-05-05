@@ -217,7 +217,7 @@ class __retracking__():
         return alpha/(H*c)
 
 
-    def full_pulse(self, t, varelev, slopes_coeff, H, sigma0, t0, t_pulse=None, c=None):
+    def full_pulse(self, t, varelev, slopes_coeff, H, sigma0, t0, t_pulse=None, c=None, dtype=1):
 
         # Программа Караева считает только F1
         if t_pulse == None:
@@ -226,21 +226,31 @@ class __retracking__():
         if c == None:
             c = self.c
 
-        # t += H/c
-# (np.exp(slopes_coeff*H*c*t_pulse) - 1)
         F1 =  np.exp(-slopes_coeff*H*c*(t-t0) + 2*varelev*slopes_coeff**2*H**2) * \
             (1 - erf( slopes_coeff*H*np.sqrt(2*varelev) + (t_pulse - t + t0)*c/(2*np.sqrt(2*varelev))) )
 
-        # F2 = erf((t_pulse - t)*c/(2*np.sqrt(2*varelev))) +  erf(t*c/(2*np.sqrt(2*varelev)))
+        F2 = erf((t_pulse - t)*c/(2*np.sqrt(2*varelev))) +  erf(t*c/(2*np.sqrt(2*varelev)))
 
-        # F3 = np.exp(-slopes_coeff*H*c*t + 2*varelev*slopes_coeff**2*H**2) * \
-        #     (
-        #         erf( slopes_coeff*H*np.sqrt(2*varelev) + (t_pulse - t)*c/(2*np.sqrt(2*varelev)))
-        #         -
-        #         erf( slopes_coeff*H*np.sqrt(2*varelev) - t*c/(2*np.sqrt(2*varelev)))
-        #     )
+        F3 = np.exp(-slopes_coeff*H*c*t + 2*varelev*slopes_coeff**2*H**2) * \
+            (
+                erf( slopes_coeff*H*np.sqrt(2*varelev) + (t_pulse - t)*c/(2*np.sqrt(2*varelev)))
+                -
+                erf( slopes_coeff*H*np.sqrt(2*varelev) - t*c/(2*np.sqrt(2*varelev)))
+            )
+        
+        if dtype == 1:
+            F = F1
 
-        return sigma0/2 * ( F1 )
+        if dtype == 2:
+            F = F1 + F2
+
+        if dtype == 3:
+            F = F1 + F2 + F3
+        
+
+        
+
+        return sigma0/2 * F
 
 
 

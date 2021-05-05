@@ -10,7 +10,7 @@ package_data = {
 }
 setuptools.setup(
     name="seawavepy",
-    version="0.2.1b",
+    version_command='git describe',
     author="Kirill Ponur",
     author_email="ponur@ipfran.ru",
     description="",

@@ -117,6 +117,27 @@ def default(out, x, y, t, k, A):
     for m in range(6):
         out[m, n, i, j] = surface[m]
 
+@cuda.jit
+def cwm(x, y, t, k, A):
+    i, j, n = cuda.grid(3)
+
+    if i > x.size or j > y.size or  n > t.size:
+        return
+
+    x[n, i, j], y[n, i, j]  = cwm_base(x[n,i,j], y[n,i,j], t[n], k, A)
+
+    
+@cuda.jit(device=True)
+def cwm_base(x, y, t, k, A):
+    for n in range(k.shape[0]): 
+        for m in range(k.shape[1]):
+            kr = k[n,m].real*x + k[n,m].imag*y
+            w = dispersion(k[n,m])
+            e = A[n,m] * exp(1j*kr)  * exp(1j*w*t)
+
+            x -= e.imag * k[n,m].real/abs(k[n,m])
+            y -= e.imag * k[n,m].imag/abs(k[n,m])
+    return x, y
 
 @cuda.jit(device=True)
 def base(surface, x, y, t, k, A):
@@ -148,7 +169,8 @@ def base(surface, x, y, t, k, A):
 
     return surface
 
-def init(srf: xr.Dataset, host_constants, kernel=default):
+
+def init(srf: xr.Dataset, host_constants):
 
     x = srf.coords["x"].values
     y = srf.coords["y"].values
@@ -188,16 +210,29 @@ def init(srf: xr.Dataset, host_constants, kernel=default):
     # threadsperblock = tuple(threadsperblock)
     blockspergrid = tuple( math.ceil(sizes[i] / threadsperblock[i])  for i in range(len(threadsperblock)))
 
-    x0 = cuda.to_device(x)
-    y0 = cuda.to_device(y)
-    t0 = cuda.to_device(t)
+    if "default" in config["Surface"]["Kernel"]:
+        x0 = cuda.to_device(x)
+        y0 = cuda.to_device(y)
+        t0 = cuda.to_device(t)
 
-    kernel[blockspergrid, threadsperblock](arr, x0, y0, t0, *cuda_constants)
+        default[blockspergrid, threadsperblock](arr, x0, y0, t0, *cuda_constants)
 
-    srf.elevations.values = arr[0]
-    srf.coords['Z'].values = arr[0]
-    srf.velocities.values = arr[1:4]
-    srf.slopes.values = arr[4:7]
+        srf.elevations.values = arr[0]
+        srf.coords['Z'].values = arr[0]
+        srf.velocities.values = arr[1:4]
+        srf.slopes.values = arr[4:7]
+
+    if "CWM-grid" in config["Surface"]["Kernel"]:
+
+        X = srf.coords["X"].values
+        Y = srf.coords["Y"].values
+
+        X = np.repeat(X[None], t.size, axis=0)
+        Y = np.repeat(Y[None], t.size, axis=0)
+
+        cwm[blockspergrid, threadsperblock](X, Y, t, *cuda_constants)
+        srf["X"] = (["time", "x", "y"], X)
+        srf["Y"] = (["time", "x", "y"], Y)
 
     return srf
 
@@ -206,9 +241,21 @@ def init(srf: xr.Dataset, host_constants, kernel=default):
 
     
 
-def wind(ds: xr.Dataset):
-    host_constants = ds.spectrum()
-    return init(ds, host_constants, kernel = default)
+def wind(ds: surface):
+
+    if hasattr(ds, "spectrum") and callable(getattr(ds, "spectrum")):
+        host_constants = ds.spectrum()
+    elif ds.get("k") is not None:
+        k = ds["k"].values
+        phi = ds["phi"].values
+        psi = ds["phases"].values
+        A = ds["harmonics"].values
+
+        k = k[None].T * np.exp(1j*phi)
+        host_constants = (k, A*np.exp(1j*psi))
+
+    return init(ds, host_constants)
+
 
 def stat(ds: xr.Dataset):
     statistics(ds)

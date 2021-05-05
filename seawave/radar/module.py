@@ -123,7 +123,7 @@ class __radar__():
  
 
 
-        if np.isnan(t).any() == None:
+        if isinstance(t, type(None)):
             t = np.arange(self.find_tmin(srf), self.find_tmax(srf), timp/4) 
         
 

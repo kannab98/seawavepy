@@ -75,7 +75,7 @@ class __spectrum__(object):
         self._x = config['Surface']['NonDimWindFetch']
         self._U = config['Wind']['Speed']
         self._wavelength = config['Radar']['WaveLength']
-        self._band = config["Surface"]["Band"]
+        self._band = config["Radar"]["WaveLength"]
         self.k_m = None
         self.peak = None
         self.KT = np.array([1.49e-2, 2000])
@@ -418,7 +418,7 @@ class __spectrum__(object):
 
 
     def dblquad(self, a, b, c, k0=None, k1=None, phi0=None, phi1=None,  speckwargs=dict(), **quadkwargs):
-        limit = np.array([self.KT[0], *self.limit_k, self.KT[-1]])
+        limit = np.array([self.KT[0], *self.bounds, self.KT[-1]])
 
         if k0==None:
             k0 = self.KT[0]
