@@ -156,7 +156,7 @@ class __spectrum__(object):
 
         return eps
     
-    def __find_k_bound(self, radarWaveLength,  **kwargs):
+    def _find_k_bound(self, radarWaveLength,  **kwargs):
         speckwargs = dict(radar_dispatcher=False)
         eps = self.curv_criteria()
         Func = lambda k_bound: np.power( radarWaveLength/(2*np.pi) * np.sqrt(self.quad(4,0,0, k_bound, speckwargs=speckwargs, epsabs=1.49e-6, )), 1/3 ) - eps
@@ -180,8 +180,8 @@ class __spectrum__(object):
         bands = {"C":1, "X":2, "Ku":3, "Ka":4}
 
 
-        # if self.k_m == None:
-        #     self.__call__dispatcher__(radar_dispatcher=False)
+        if self.k_m == None:
+            self.peakUpdate(radar_dispatcher=False)
 
         k_m = self.k_m
 
@@ -224,7 +224,8 @@ class __spectrum__(object):
                 if band[i-1] == 0:
                     edges[i] = 2000
                 else:
-                    edges[i] = self.__find_k_bound(band[i-1], )
+                    edges[i] = self._find_k_bound(band[i-1], )
+                    # if edges[i]
 
         # edges = np.array([ bands_edges[i](k_m) for i in range(bands[band]+1)])
         return edges
@@ -238,7 +239,7 @@ class __spectrum__(object):
         U = config['Wind']['Speed']
         Udir = config['Wind']['Direction']
 
-        logger.info('Start modeling with U=%.1f, Udir=%.1f, x=%.1f,' % (U, Udir, x))
+        logger.info('Start modeling with U=%.1f, Udir=%.1f, x=%.1f, lambda=%s' % (U, Udir, x, str(config["Radar"]["WaveLength"])))
 
         # коэффициент gamma (см. спектр JONSWAP)
         self._gamma = self.Gamma(x)
@@ -530,36 +531,50 @@ class __spectrum__(object):
     #     )
     #     return fft.fftshift(spec)
 
-    def pdf_heights(self, z, dtype="default"):
-        sigma0 = self.quad(0,0)
-        if dtype == 'default':
-            return 1/np.sqrt(2*np.pi*sigma0) * np.exp(-1/2*z**2/sigma0)
+    def pdf_heights(self, z=None, dtype=None):
+        if z is None:
+            sigma0 = self.quad(0,0)
+            z = np.linspace(-3*np.sqrt(sigma0), +3*np.sqrt(sigma0), 128)
+            pdf = 1/np.sqrt(2*np.pi*sigma0) * np.exp(-1/2*z**2/sigma0)
+        else:
+            pdf, z = np.histogram(z, density=True, bins = "auto")
+            z = z[:-1]
 
-        if dtype == 'cwm':
+        if dtype == "cwm":
             sigma0 = self.quad(0,0)
             sigma1 = self.quad(1,0)
-            return self.pdf_heights(z, 'default') * (1 - sigma1/sigma0*z)
+            pdf *= (1 - sigma1/sigma0*z)
 
-    def pdf_slopes(self, z, dtype="default"):
+        return pdf, z
 
-        # sigma = self.quad(2,0)
-        sigma = 0.0
-        if dtype == 'default':
-            return 1/np.sqrt(2*np.pi*sigma) * np.exp(-1/2*z**2/sigma)
+    def cdf_heights(self, *args, **kwargs):
+        cdf = np.cumsum(self.pdf_heights(*args, **kwargs))
+        return cdf
 
-        if dtype == 'cwm':
-            return (
-                + np.exp(-1/(2*sigma))/(np.pi*(1+z**2)**2)
-                + 1/np.sqrt(2*np.pi*sigma)
-                * (sigma*(1+z**2)+1)/(1+z**2)**(5/2)
-                * erf(1/np.sqrt(2*sigma*(1+z**2)))
-                * np.exp(-1/(2*sigma)*(z**2/(1+z**2)))
+    def cdf_slopes(self, *args, **kwargs):
+        cdf = np.cumsum(self.pdf_slopes(*args, **kwargs))
+        return cdf
+
+    def pdf_slopes(self, z=None, dtype="default"):
+
+        if z is None:
+            sigma0 = self.quad(2,0)
+            z = np.linspace(-3*np.sqrt(sigma0), +3*np.sqrt(sigma0), 128)
+            pdf = 1/np.sqrt(2*np.pi*sigma0) * np.exp(-1/2*z**2/sigma0)
+
+        else:
+            pdf, z = np.histogram(z, density=True, bins = "auto")
+            z = z[:-1]
+
+        if dtype == "cwm":
+            sigma2 = self.quad(2,0)
+            pdf = (
+                np.exp(-1/(2*sigma2))/( np.pi*(1 + z**2)**2 )  +
+                 (sigma2*(1+z**2) + 1)/np.sqrt(2*np.pi*sigma2)/(1+z**2)**(5/2) * 
+                 erf(1/np.sqrt(2*sigma2*(1+z**2))) * np.exp(-1/(2*sigma2)*(z**2/(1+z**2)))
             )
 
-
-
-
-
+        return pdf, z
 
 
 
