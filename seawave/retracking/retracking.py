@@ -46,7 +46,7 @@ class __retracking__():
         # Скорость света/звука
         self.c = config['Constants']['WaveSpeed']
         # Длительность импульса в секундах
-        self.T = config['Radar']['ImpulseDuration']
+        # self.T = config['Radar']['ImpulseDuration']
 
 
     def from_file(self, file, config):
@@ -91,7 +91,6 @@ class __retracking__():
             df0[f, "t"] = sr.iloc[:, 0]
             df0[f, "P"] = sr.iloc[:, 1]
             df0[f, 'P_retr'] = self.ice(sr.iloc[:, 0], *popt)
-
             df.iloc[i][3:] = popt
             df.iloc[i][0] = self.swh(df.iloc[i]["Sigma"])
             df.iloc[i][1] = self.height(df.iloc[i]["Epoch"])
@@ -112,6 +111,31 @@ class __retracking__():
 
         return df0, df
         
+    def restore(self, t, P):
+        popt = self.pulse(t, P)
+        H = self.height(popt[2])
+        Hs =  self.swh(popt[3])
+
+        logger.info("Параметры излучателя: ДН=%d, tau=%2E" % (config["Radar"]["GainWidth"], config['Radar']["ImpulseDuration"]))
+
+        slopes_coeff = self.slopes_coeff(popt[1], H, self.c)
+        # print('Coeff1', slopes_coeff)
+        # print(popt[1], slopes_coeff)
+        varslopes = self.varslopes(slopes_coeff, H, np.deg2rad(config['Radar']['GainWidth']))
+
+
+        # pulse = lambda t, slopes_coeff, sigma0: self.full_pulse(t, (Hs/4)**2, slopes_coeff, H, sigma0, config["Radar"]["ImpulseDuration"], c=1500, dtype=3)
+        # p0 = [slopes_coeff, popt[0]]
+        # popt = curve_fit(pulse, 
+        #                     xdata=t-H/1500,
+        #                     ydata=P,
+        #                     p0=p0,
+        #                 )[0]
+
+        # print('Coeff2', popt[1])
+        # print( "Дисп", self.varslopes(popt[0], H, np.deg2rad(config['Radar']['GainWidth'])))
+        return H, Hs, varslopes, popt
+
 
     @staticmethod
     def leading_edge(t, pulse, dtype="needed"):
@@ -205,6 +229,9 @@ class __retracking__():
                             p0=p0,
                             **kwargs
                         )[0]
+
+        # print(alpha, popt[1])
+        # popt[1] = alpha
         logger.info('Restore pulse parameters: h=%.4f, Hs=%.4f' % (self.height(popt[2]), self.swh(popt[3]) ))
         return popt 
 
@@ -219,15 +246,17 @@ class __retracking__():
 
     def full_pulse(self, t, varelev, slopes_coeff, H, sigma0, t0, t_pulse=None, c=None, dtype=1):
 
-        # Программа Караева считает только F1
         if t_pulse == None:
-            t_pulse = self.T
+            t_pulse = config["Radar"]["ImpulseDuration"]
 
         if c == None:
             c = self.c
 
-        F1 =  np.exp(-slopes_coeff*H*c*(t-t0) + 2*varelev*slopes_coeff**2*H**2) * \
-            (1 - erf( slopes_coeff*H*np.sqrt(2*varelev) + (t_pulse - t + t0)*c/(2*np.sqrt(2*varelev))) )
+        t = t.copy()
+        t -= t0
+
+        F1 =  np.exp(-slopes_coeff*H*c*t + 2*varelev*slopes_coeff**2*H**2) * \
+            (1 - erf( slopes_coeff*H*np.sqrt(2*varelev) + (t_pulse - t)*c/(2*np.sqrt(2*varelev))) )
 
         F2 = erf((t_pulse - t)*c/(2*np.sqrt(2*varelev))) +  erf(t*c/(2*np.sqrt(2*varelev)))
 
@@ -245,7 +274,7 @@ class __retracking__():
             F = F1 + F2
 
         if dtype == 3:
-            F = F1 + F2 + F3
+            F = F1 + F2 - F3
         
 
         
@@ -263,13 +292,13 @@ class __retracking__():
         # Скорость света/звука [м/с]
         c = self.c
         # Длительность импульса [с]
-        T = self.T
-
-        sigma_p = 0.425 * T
+        T = config["Radar"]["ImpulseDuration"]
+        theta = np.deg2rad(config["Radar"]["GainWidth"])
+        sigma_p = 0.425 * T 
         sigma_c = sigma_l/np.sqrt(2)
         sigma_s = np.sqrt((sigma_c**2 - sigma_p**2))*c/2
-        return 4*sigma_s
-    
+        factor = np.sqrt(0.425/(2*np.sin(theta/2)**2/np.log(2)))
+        return 4*sigma_s * factor
 
     def height(self, tau):
         """

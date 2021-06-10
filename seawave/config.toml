@@ -11,6 +11,11 @@ Direction = 45
 # Скорость  приповерхностного ветра
 Speed = 5 # м/с
 
+[Stream]
+Enable = false
+Direction = 0
+Speed = 5 # м/с
+
 [Constants]
 # Скорость распространения волны (световой, звуковой) в среде
 WaveSpeed = 1500 # м/с
@@ -48,5 +53,6 @@ Direction = [0, 0]
 ImpulseDuration = 4e-5 # с
 
 [Dataset]
+Save = true
 File = "database.nc"
 RetrackingFileName = "impulses.xlsx"

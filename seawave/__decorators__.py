@@ -53,7 +53,7 @@ def spectrum_dispatcher():
                     self.peakUpdate(radar_dispatcher)
 
                 self._x, self._U = x, U
-                self._wavelength = rc.antenna.waveLength
+                self._wavelength = config["Radar"]["WaveLength"]
 
 
 

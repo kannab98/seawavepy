@@ -127,16 +127,9 @@ class __radar__():
             t = np.arange(self.find_tmin(srf), self.find_tmax(srf), timp/4) 
         
 
-        P = np.zeros((t.size, *d.shape), dtype=float)
+        # P = np.zeros((t.size, *d.shape), dtype=float)
+        P = np.zeros((t.size, d.shape[0]), dtype=float)
         numba_power(t, d, G, AoA, P)
-        P = np.sum(P**2/2, axis=(-1, -2))
-
-        # threadsperblock = (16,16)
-        # sizes = (t.size, d.shape[0])
-        # P = np.zeros((t.size, d.shape[0]), dtype=float)
-
-        # blockspergrid = tuple( math.ceil(sizes[i] / threadsperblock[i])  for i in range(len(threadsperblock)))
-        # cuda_power[blockspergrid, threadsperblock](t, d, G, AoA, P)
 
         srf['pulse'] = dataset.pulse(P, srf['time'], t)
 
@@ -182,30 +175,47 @@ class __radar__():
 
     
 
+# @guvectorize(
+#     ["void(float64[:], float64[:,:,:], float64[:,:,:], float64[:,:,:], float64[:,:,:,:])"],
+#     "(n), (x,y,t), (x,y,t), (x,y,t) -> (n,x,y,t)", forceobj=True, target='parallel'
+# )
+# def numba_power(t, Rabs, G, theta0, result, ):
+#     tau = Rabs / c
+#     t = np.expand_dims(t, axis=(0,1,2) ).T
+
+#     anglemask = ( np.abs(np.arccos(np.cos(theta0)) ) <= np.deg2rad(1) )
+#     timemask = (0 <= t - tau) & (t - tau <= timp) 
+
+#     np.power(G/Rabs, 2, where=anglemask & timemask, out=result)
+#     return result
+
+
 @guvectorize(
-    ["void(float64[:], float64[:,:,:], float64[:,:,:], float64[:,:,:], float64[:,:,:,:])"],
-    "(n), (x,y,t), (x,y,t), (x,y,t) -> (n,x,y,t)", forceobj=True, target='parallel'
+    ["void(float64[:], float64[:,:,:], float64[:,:,:], float64[:,:,:], float64[:,:])"],
+    "(n), (t,x,y), (t,x,y), (t,x,y) -> (n,t)", target='parallel'
 )
-def numba_power(t, Rabs, G, theta0, result, ):
-    tau = Rabs / c
-    t = np.expand_dims(t, axis=(0,1,2) ).T
+def numba_power(t, Rabs, G, theta0, result):
 
-    anglemask = ( np.abs(np.arccos(np.cos(theta0)) ) <= np.deg2rad(1) )
-    timemask = (0 <= t - tau) & (t - tau <= timp) 
+    for m in range(t.size):
+        for n in range(Rabs.shape[0]):
+            for i in range(Rabs.shape[1]):
+                for j in range(Rabs.shape[2]):
+                    ind = (n,i,j)
+                    tau = Rabs[ind]/c
+                    anglemask = ( np.abs(np.arccos(np.cos(theta0[ind])) ) <= np.deg2rad(1) )
+                    timemask = (0 <= t[m] - tau) & (t[m] - tau <= timp) 
+                    if timemask and anglemask:
+                        result[m, n] += (G[ind]/Rabs[ind])**4/2
 
-    np.power(G/Rabs, 2, where=anglemask & timemask, out=result)
-    return result
+# @cuda.jit
+# def cuda_power(t, Rabs, G, theta0, result):
+#     n, m = cuda.grid(2)
+#     if m > t.size or n > Rabs.shape[0]:
+#         return
 
-
-@cuda.jit
-def cuda_power(t, Rabs, G, theta0, result):
-    n, m = cuda.grid(2)
-    if m > t.size or n > Rabs.shape[0]:
-        return
-
-    for i in range(Rabs.shape[1]):
-        for j in range(Rabs.shape[2]):
-            tau = Rabs[n, i, j]/c
-            timemask = (0 <= t[m] - tau) & (t[m] - tau <= timp)
-            if timemask:
-                result[m, n] += (G[n, i, j]/Rabs[n, i, j])**4/2
+#     for i in range(Rabs.shape[1]):
+#         for j in range(Rabs.shape[2]):
+#             tau = Rabs[n, i, j]/c
+#             timemask = (0 <= t[m] - tau) & (t[m] - tau <= timp)
+#             if timemask:
+#                 result[m, n] += (G[n, i, j]/Rabs[n, i, j])**4/2
