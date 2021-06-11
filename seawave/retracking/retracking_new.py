@@ -97,6 +97,10 @@ class brown(pulse):
         # return 4*sigma_s * factor
         return 4*sigma_s
 
+    @property
+    def varelev(self):
+        return (self.swh/4)**2
+
 
     def curve_fit(self, **kwargs):
 
@@ -155,14 +159,14 @@ class karaev(pulse):
         self.popt, self.pcov = curve_fit(self.pulse, 
                     xdata=t,
                     ydata=power,
-                    p0=[0.002, 0, H0, sigma0max/2],
+                    p0=[0.002, 0, H0, sigma0max/2, 0],
                     bounds = ( 
-                                (0.002, 0, Hmin, 0),
-                                (5.5, np.inf, Hmax, np.inf)
+                                (0.002, 0, Hmin, 0, 0),
+                                (5.5, np.inf, Hmax, np.inf, np.inf)
                     )
                 )
 
-    def pulse(self, t, varelev, slopes_coeff, H, sigma0):
+    def pulse(self, t, varelev, slopes_coeff, H, sigma0, noise):
 
 
         c = self.c
@@ -174,18 +178,18 @@ class karaev(pulse):
         F1 =  np.exp(-slopes_coeff*H*c*t + 2*varelev*slopes_coeff**2*H**2) * \
             (1 - erf( slopes_coeff*H*np.sqrt(2*varelev) + (t_pulse - t)*c/(2*np.sqrt(2*varelev))) )
 
-        # F2 = erf((t_pulse - t)*c/(2*np.sqrt(2*varelev))) +  erf(t*c/(2*np.sqrt(2*varelev)))
+        F2 = erf((t_pulse - t)*c/(2*np.sqrt(2*varelev))) +  erf(t*c/(2*np.sqrt(2*varelev)))
 
-        # F3 = np.exp(-slopes_coeff*H*c*t + 2*varelev*slopes_coeff**2*H**2) * \
-        #     (
-        #         erf( slopes_coeff*H*np.sqrt(2*varelev) + (t_pulse - t)*c/(2*np.sqrt(2*varelev)))
-        #         -
-        #         erf( slopes_coeff*H*np.sqrt(2*varelev) - t*c/(2*np.sqrt(2*varelev)))
-        #     )
+        F3 = np.exp(-slopes_coeff*H*c*t + 2*varelev*slopes_coeff**2*H**2) * \
+            (
+                erf( slopes_coeff*H*np.sqrt(2*varelev) + (t_pulse - t)*c/(2*np.sqrt(2*varelev)))
+                -
+                erf( slopes_coeff*H*np.sqrt(2*varelev) - t*c/(2*np.sqrt(2*varelev)))
+            )
         
-        F2, F3 = 0, 0
+        # F2, F3 = 0, 0
 
-        return sigma0/2 * (F1 + F2 + F3)
+        return sigma0/2 * (F1 + F2 + F3) + noise
 
 
 

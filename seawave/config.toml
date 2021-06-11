@@ -35,7 +35,6 @@ WaveNumberSize = 1024
 AzimuthSize = 128
 # Безразмерный ветровой разгон
 NonDimWindFetch = 20170
-Band = "Ku"
 ThreadPerBlock = [8, 8, 8]
 
 
@@ -54,5 +53,5 @@ ImpulseDuration = 4e-5 # с
 
 [Dataset]
 Save = true
-File = "database.nc"
+File = "dataset.nc"
 RetrackingFileName = "impulses.xlsx"
