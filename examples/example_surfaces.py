@@ -13,7 +13,6 @@ config["Surface"]["LimitsOfModeling"] = [[-50, 50], [-50, 50]]
 config['Surface']['GridSize'] = [128, 128]
 config['Surface']['ThreadPerBlock'] = [16, 16, 1]
 config['Surface']["Kernel"] = "default"
-config['Radar']['Position'] = [0, 0, 30]
 
 
 config['Wind']['Direction'] = 30
@@ -34,4 +33,4 @@ t = np.arange(0, 1, 1/fs, dtype=np.float32)
 ds = surface((x,y,t), config=config)
 
 wind(ds)
-print(ds)
+# print(ds)
