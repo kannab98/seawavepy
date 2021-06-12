@@ -5,8 +5,8 @@ print(setuptools.find_packages())
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-package_data = { 
-    "":["*.json", "*.toml"] 
+package_data = {
+    "config files":["*.toml"]
 }
 setuptools.setup(
     name="seawavepy",
@@ -25,5 +25,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=['numpy', 'scipy', 'pandas', 'matplotlib', 'toml'],
+    install_requires=['numpy', 'scipy', 'pandas',
+                      'xarray', 'matplotlib',
+                      'numba', 'toml'],
 )
