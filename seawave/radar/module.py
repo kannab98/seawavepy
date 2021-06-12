@@ -117,6 +117,7 @@ class __radar__():
 
 
         G = self.gain(srf['AoD'], config['Radar']['Direction'][1])
+
         # self.angle_of_arrival(srf)
         d = srf['distance'].values
         AoA = srf['AoA'].values
@@ -134,6 +135,12 @@ class __radar__():
         srf['pulse'] = dataset.pulse(P, srf['time'], t)
 
         return P
+    
+    def image(self, srf):
+        srf['power'] = srf.elevations.copy()
+        G = self.gain(srf['AoD'], config['Radar']['Direction'][1])
+        d = srf['distance']
+        srf['power'] = G**2/d**4
 
     
     def find_rho(self, srf):

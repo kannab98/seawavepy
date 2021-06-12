@@ -4,7 +4,7 @@ import numba
 from numba import f8, cuda
 from .dataset import elevations, slopes, velocities, harmonics, phases, statistics
 from ..spectrum import spectrum
-from .. import config
+from .. import config, exit_handler
 
 import atexit
 import math
@@ -52,7 +52,6 @@ class surface(float_surface):
 
     def __init__(self, data, **kwargs):
             super().__init__(coords=data, **kwargs)
-            # exit_handler = lambda: self.to_netcdf('database.nc')
             atexit.register(exit_handler, self)
 
 
@@ -379,13 +378,3 @@ def wind(ds: surface, dtype=config["Surface"]["Kernel"],**kwargs):
 
 def stat(ds: xr.Dataset):
     statistics(ds)
-
-def exit_handler(srf):
-
-    for coord in ['X', 'Y']:
-        if np.allclose(srf[coord].values[0,:,:], srf[coord].values):
-            srf[coord] = (["x", "y"], srf[coord].values[0,:,:]) 
-
-    if config["Dataset"]["File"]:
-        print("Save file before exit")
-        srf.to_netcdf(config['Dataset']['File'])

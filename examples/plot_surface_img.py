@@ -6,12 +6,13 @@ srf = xr.open_dataset("test-dataset.nc")
 elev = srf["elevations"].values
 X = srf["X"].values
 Y = srf["Y"].values
+t = srf["time"].values
 
-
-fig, ax = plt.subplots()
-img = ax.contourf(X, Y, elev[0], levels=100)
-bar = plt.colorbar(img)
-ax.set_xlabel("x")
-ax.set_ylabel("y")
-bar.set_label("elevations")
-fig.savefig("examples/elev-img.png")
+for i in range(t.size):
+	fig, ax = plt.subplots()
+	img = ax.contourf(X, Y, elev[i], levels=100)
+	bar = plt.colorbar(img)
+	ax.set_xlabel("x")
+	ax.set_ylabel("y")
+	bar.set_label("elevations")
+	fig.savefig("examples/elev-img-%d.png" % i)

@@ -1,7 +1,8 @@
-from json import load
+
 import logging
 import sys, os
 import toml
+from numpy import allclose
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -35,3 +36,15 @@ logger.info('Load config from %s' % configfile)
 fh = logging.FileHandler('modeling.log')
 fh.setFormatter(formatter)
 logger.addHandler(fh)
+
+
+
+def exit_handler(srf):
+    logger.info(srf)
+    for coord in ['X', 'Y']:
+        if allclose(srf[coord].values[0,:,:], srf[coord].values):
+            srf[coord] = (["x", "y"], srf[coord].values[0,:,:]) 
+
+    if config["Dataset"]["File"]:
+        logger.info("Save file to %s" % os.path.join(os.getcwd(), config["Dataset"]["File"]))
+        srf.to_netcdf(config['Dataset']['File'])

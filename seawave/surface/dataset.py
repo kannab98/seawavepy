@@ -155,6 +155,12 @@ def radar(srf: xr.Dataset):
     srf.coords["Y"] += config['Radar']['Position'][1]
     srf.coords["Z"] = srf['elevations'] + config['Radar']['Position'][2]
 
+
+    for coord in ['X', 'Y']:
+        if len(srf[coord].shape) != len(srf['Z'].shape):
+            srf[coord] = srf[coord].expand_dims("time")
+            srf[coord] = np.repeat(srf[coord], srf['Z'].shape[0], axis=0)
+
     r = np.array([srf['X'], srf['Y'], srf['Z']])
 
     distance = srf.elevations.copy()

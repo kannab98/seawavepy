@@ -10,7 +10,7 @@ package_data = {
 }
 setuptools.setup(
     name="seawavepy",
-    version_command='git describe',
+    version_command='git describe --tags',
     author="Kirill Ponur",
     author_email="ponur@ipfran.ru",
     description="",
