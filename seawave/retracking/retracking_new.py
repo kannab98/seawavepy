@@ -16,6 +16,8 @@ def get_files(file, **kwargs):
     """
     Рекурсивный поиск данных по регулярному выражению 
     """
+    file = file.replace('\\', os.path.sep)
+    file = file.replace('/', os.path.sep)
     path, file = os.path.split(file)
 
     path = os.path.abspath(path)
@@ -28,8 +30,7 @@ def get_files(file, **kwargs):
     for root, dirs, files in os.walk(path, **kwargs):
         for file in files:
             tmpfile = os.path.join(root, file)
-            _files_ += list(map(root.__add__, rx.findall(tmpfile)))
-            # _files_ += rx.findall(tmpfile)
+            _files_ += rx.findall(tmpfile)
     
     for file in _files_:
         logger.info("Found file: %s" % file)
