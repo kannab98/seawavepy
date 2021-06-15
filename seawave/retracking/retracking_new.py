@@ -52,7 +52,8 @@ def to_xlsx(pulses):
         ptype = pulses[i].type
         df0[f, "t"] = t
         df0[f, "P"] = pulses[i].power
-        df0[f, "Pest"] = pulses[i].pulse(t, *pulses[i].popt)
+        if (pulses[i].popt != None):
+            df0[f, "Pest"] = pulses[i].pulse(t, *pulses[i].popt)
 
         df.iloc[i][0] = pulses[i].swh
         df.iloc[i][1] = pulses[i].height
@@ -73,16 +74,23 @@ class pulse(object):
         self.type = type(self).__name__
 
         if 'file' in kwargs:
-            df = pd.read_csv(kwargs['file'], sep="\s+", comment="#")
-            self.time = df.iloc[:,0].values
-            self.power = df.iloc[:,1].values
+            try:
+                df = pd.read_csv(kwargs['file'], sep="\s+", comment="#")
+                self.time = df.iloc[:,0].values
+                self.power = df.iloc[:,1].values
+                self.curve_fit()
+            except:
+                self.time = None
+                self.power= None
+                self.popt = [None, None, None, None, None]
+                self.pcov = None
+
             self.src = kwargs['file']
         elif 't' in kwargs and 'P' in kwargs:
             self.time = kwargs["t"]
             self.power = kwargs["P"]
             self.src = ""
-
-        self.curve_fit()
+            self.curve_fit()
 
     def curve_fit(self):
         pass
@@ -107,9 +115,12 @@ class brown(pulse):
         Вычисление высоты от антенны до поверхности воды
         """
         # Скорость света/звука [м/с]
-        tau = self.popt[2] 
-        c = self.c
-        return tau*c/2
+        if self.popt[2] != None:
+            tau = self.popt[2] 
+            c = self.c
+            return tau*c/2
+        else:
+            return None
 
     @property
     def swh(self):
@@ -118,22 +129,27 @@ class brown(pulse):
         Вычисление высоты значительного волнения
         """
         # Скорость света/звука [м/с]
-        c = self.c
-        
-        # Длительность импульса [с]
-        sigma_l = self.popt[3]
-        T = config["Radar"]["ImpulseDuration"]
-        theta = np.deg2rad(config["Radar"]["GainWidth"])
-        sigma_p = 0.425 * T 
-        sigma_c = sigma_l/np.sqrt(2)
-        sigma_s = np.sqrt((sigma_c**2 - sigma_p**2))*c/2
-        factor = np.sqrt(0.425/(2*np.sin(theta/2)**2/np.log(2)))
-        # return 4*sigma_s * factor
-        return 4*sigma_s
+        if self.popt[3] != None:
+            c = self.c
+            # Длительность импульса [с]
+            sigma_l = self.popt[3]
+            T = config["Radar"]["ImpulseDuration"]
+            theta = np.deg2rad(config["Radar"]["GainWidth"])
+            sigma_p = 0.425 * T 
+            sigma_c = sigma_l/np.sqrt(2)
+            sigma_s = np.sqrt((sigma_c**2 - sigma_p**2))*c/2
+            factor = np.sqrt(0.425/(2*np.sin(theta/2)**2/np.log(2)))
+            # return 4*sigma_s * factor
+            return 4*sigma_s
+        else:
+            return None
 
     @property
     def varelev(self):
-        return (self.swh/4)**2
+        if self.swh != None:
+            return (self.swh/4)**2
+        else:
+            return None
 
     @property
     def varslopes(self):
@@ -165,24 +181,37 @@ class karaev(pulse):
     @property
     def varslopes(self):
         # Вычисление дисперсии наклонов через Ах, высоту и ширину ДН
-        H = self.height
-        slopes_coeff = self.popt[1]
-        delta = self.delta
-        invvarslopes = 2*(slopes_coeff*H**2 - 5.52/delta**2)
-        return 1/invvarslopes
+        if self.popt[1] != None:
+            H = self.height
+            slopes_coeff = self.popt[1]
+            delta = self.delta
+            invvarslopes = 2*(slopes_coeff*H**2 - 5.52/delta**2)
+            return 1/invvarslopes
+        else:
+            return None
         # return 1/ ( 2 * ( slopes_coeff * H**2 - 5.52/delta**2)  )
 
     @property
     def height(self):
-        return self.popt[2]/2
+        if self.popt[2] != None:
+            return self.popt[2]/2
+        else:
+            return None
 
     @property
     def varelev(self):
-        return self.popt[0]
+
+        if self.popt[0] != None:
+            return self.popt[0]
+        else:
+            return None
 
     @property
     def swh(self):
-        return 4*np.sqrt(self.popt[0])
+        if self.popt[0] != None:
+            return 4*np.sqrt(self.popt[0])
+        else:
+            return None
 
     
     def curve_fit(self):
@@ -205,6 +234,9 @@ class karaev(pulse):
 
     def pulse(self, t, varelev, slopes_coeff, H, sigma0, noise):
 
+
+        if t == None:
+            return None
 
         c = self.c
         t_pulse = self.tau
