@@ -16,8 +16,8 @@ def get_files(file, **kwargs):
     """
     Рекурсивный поиск данных по регулярному выражению 
     """
-    file = file.replace('\\', os.path.sep)
-    file = file.replace('/', os.path.sep)
+    # file = file.replace('\\', os.path.sep)
+    # file = file.replace('/', os.path.sep)
     path, file = os.path.split(file)
 
     path = os.path.abspath(path)
