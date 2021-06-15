@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 package_data = {
-    "config files":["*.toml"]
+    "config files":["config.toml"]
 }
 setuptools.setup(
     name="seawavepy",

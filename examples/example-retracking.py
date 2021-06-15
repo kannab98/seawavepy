@@ -17,16 +17,17 @@ config["Radar"]["GainWidth"] = 15
 config["Radar"]["ImpulseDuration"] = 60e-6
 
 files = rtr.get_files("tests/impulses/.*.txt")
+# files = rtr.get_files("/mnt/DS_Gelendgik/3_February/1febr/kalmarImp1february2020_33khz_0009/Imp/!ALT_PAR.*")
 
-pulses = []
-for file in files:
-	pulses.append(rtr.karaev(file=file, config=config))
-rtr.to_xlsx(pulses)
+# pulses = []
+# for file in files:
+	# pulses.append(rtr.karaev(file=file, config=config))
+# rtr.to_xlsx(pulses)
 
-pulses = []
-for file in files:
-	pulses.append(rtr.brown(file=file, config=config))
-rtr.to_xlsx(pulses)
+# pulses = []
+# for file in files:
+# 	pulses.append(rtr.brown(file=file, config=config))
+# rtr.to_xlsx(pulses)
 
 
 # # popt_ice = pb.popt
