@@ -28,7 +28,8 @@ def get_files(file, **kwargs):
     for root, dirs, files in os.walk(path, **kwargs):
         for file in files:
             tmpfile = os.path.join(root, file)
-            _files_ += rx.findall(tmpfile)
+            _files_ += list(map(root.__add__, rx.findall(tmpfile)))
+            # _files_ += rx.findall(tmpfile)
     
     for file in _files_:
         logger.info("Found file: %s" % file)
