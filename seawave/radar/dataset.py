@@ -1,7 +1,7 @@
 import numpy as np
 import xarray as xr
 import atexit
-from .. import rc
+from .. import config
 
 datasets = []
 
@@ -9,9 +9,9 @@ def radar(srf: xr.Dataset):
     # angle of arrival
     # angle of departure
     labels = ['distance', 'AoD', 'AoA', 'mask']
-    srf.coords["X"] += rc.antenna.x
-    srf.coords["Y"] += rc.antenna.y
-    srf.coords["Z"] = srf['elevations'] + rc.antenna.z
+    srf.coords["X"] += config["Radar"]["Position"][0]
+    srf.coords["Y"] += config["Radar"]["Position"][1]
+    srf.coords["Z"] = srf['elevations'] + config['Radar']['Position'][2]
 
 
     r = np.array([srf['X'], srf['Y'], srf['Z']])

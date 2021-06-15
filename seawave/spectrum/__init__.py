@@ -1,4 +1,2 @@
-from . import module
-spectrum = module.__spectrum__()
-
-from . import integrate
+from . import core 
+spectrum = core.__spectrum__()

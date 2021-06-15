@@ -54,4 +54,4 @@ ImpulseDuration = 4e-5 # с
 [Dataset]
 Save = true
 File = "dataset.nc"
-RetrackingFileName = "impulses.xlsx"
+RetrackingFileName = "impulses"

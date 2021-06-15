@@ -2,14 +2,12 @@ import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
-import math as m
-from scipy import fft, interpolate, optimize, integrate
+from scipy import fft, optimize, integrate
 from scipy.special import erf
 from numba import vectorize, float64
 
 from ..__decorators__ import spectrum_dispatcher as dispatcher
 from ..__decorators__ import ufunc
-# from .integrate import quad as specquad
 from .. import config
 
 
@@ -79,7 +77,7 @@ class __spectrum__(object):
         self.k_m = None
         self.peak = None
         self.KT = np.array([1.49e-2, 2000])
-        self.k = np.logspace( np.log10(self.KT.min()), np.log10(self.KT.max()), 10**3+1)
+        self._k = np.logspace( np.log10(self.KT.min()), np.log10(self.KT.max()), 10**3+1)
 
         # self.peakUpdate(True)
 
@@ -87,6 +85,11 @@ class __spectrum__(object):
     @dispatcher()
     def bounds(self):
         return self.KT
+
+    @property 
+    @dispatcher()
+    def k(self):
+        return self._k
 
     @dispatcher()
     def __call__(self, k=None, phi=None, kind="spec"):
@@ -280,12 +283,10 @@ class __spectrum__(object):
         elif radar_dispatcher == False:
             self.KT = np.array([0, np.inf])
 
-        else: 
-            self.KT = self.kEdges(rc.surface.band)
         
 
 
-        self.k = np.logspace( np.log10(self.peak/4), np.log10(self.KT.max()), 10**3+1)
+        self._k = np.logspace( np.log10(self.peak/4), np.log10(self.KT.max()), 10**3+1)
 
         logger.info('Set bounds of modeling %s' % str(np.round(self.KT, 2)))
 
@@ -575,102 +576,6 @@ class __spectrum__(object):
             )
 
         return pdf, z
-
-
-
-    @staticmethod
-    def __wind__(x, z):
-        f = lambda x, z: x/0.4 * np.log(z/(0.684/x + 428e-7* x**2 - 443e-4))
-        return f(x,z)
-
-
-
-    def  find_friction(self):
-
-        # Finds zeroes, X - friction velocity, Z - height, Karman's constant = 0.4
-        z = 10
-        f = lambda x: x/0.4 * np.log(z/(0.684/x + 428e-7* x**2 - 443e-4))
-        root = optimize.ridder( f, 1e-8, 80)
-        return root
-
-        
-    def kontrast(self, k, beta0, sigma_w, sigma_m, e):
-
-        g = 981
-        R = 1
-        nu = 0.01
-
-        def gamma(k, e, omega):
-
-            Rw = R * np.power(omega, 2)
-
-            x1 = 2*nu*k**2/omega 
-            x2 = e * np.power(k, 3) * np.sqrt(x1) / Rw
-            x3 = 1 * x2 * e * np.power(k, 3) / (2 * x1 * Rw)
-            x4 = 2 * x2
-            x5 = 2 * x2 * e * np.power(k, 3) / (1 * np.sqrt(x1) * Rw)
-
-            return 2*nu*k**2*(x1 - x2 + x3)/(x1 - x4+ x5)
-        
-        omega_w = np.sqrt(g*k + sigma_w/R * np.power(k, 3))
-        omega_m = np.sqrt(g*k + sigma_m/R * np.power(k, 3))
-
-
-
-        G0 = gamma(k, 0, omega_w)
-        G1 = gamma(k, e, omega_m)
-
-
-        uftr = self.find_friction()
-        beta = beta0*np.power(k*uftr, 2)/omega_w
-
-        # kontrast = 0.1 * np.ones(k.size)
-        # slick_kontrast = 0
-
-        # flag = True
-        # for i in range(k.size):
-        #     if (beta[i] > 2*G0[i]) & (beta[i] > 2*G1[i]):
-        #         kontrast[i] = (beta[i] - 2*G1[i])/(beta[i] - 2*G0[i])
-
-        #         print(kontrast[i])
-        #     elif (beta[i] < 2*G0[i]) & (beta[i] < 2*G1[i]):
-        #         kontrast[i] = (2*G0[i] - beta[i]) / (2*G1[i] - beta[i])
-        #         print(kontrast[i])
-        #     else:
-        #         flag = False
-            
-        #     if flag:
-        #         slick_kontrast = kontrast[i]
-        #     else:
-        #         kontrast[i] *= slick_kontrast
-        #         print(kontrast[i])
-
-
-
-        # ind = np.where( (beta > 2*G0) & (beta > 2*G1) )[0]
-        # if len(ind) != 0:
-        #     kontrast[ind] = \
-        #         (beta - 2*G1[ind])/(beta - 2*G0[ind])
-
-        # ind = np.where( (beta < 2*G0) & (beta < 2*G1) )[0]
-        # print(ind)
-        # if len(ind) != 0:
-        #     kontrast[ind] = \
-        #         (beta - 2*G0[ind])/(beta - 2*G1[ind])
-
-
-        # return kontrast
-        return np.abs( (beta - np.minimum(G0, G1) ) / (beta - np.maximum(G0, G1)) )
-        
-    
-    def with_slick(self, k):
-        beta0 = rc.slick.beta0
-        sigma_w = rc.slick.sigmaWater
-        sigma_m = rc.slick.sigmaOil
-        sigma = rc.slick.sigma
-
-        return self.kontrast(k/100, beta0, sigma_w, sigma_m, sigma)
-
 
 
 

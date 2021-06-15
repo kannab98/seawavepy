@@ -33,20 +33,50 @@ def get_files(file, **kwargs):
 
     return _files_
 
+def to_xlsx(pulses):
+    files = []
+    for i in range(len(pulses)):
+        files.append(pulses[i].src)
+    
+
+    columns = pd.MultiIndex.from_product([ files, ["t", "P", "Pest"] ])
+
+    df0 = pd.DataFrame(columns=columns)
+    df = pd.DataFrame(columns=["SWH", "H", "VarSlopes"], index=files)
+    for i, f in enumerate(files):
+        t = pulses[i].time
+        ptype = pulses[i].type
+        df0[f, "t"] = t
+        df0[f, "P"] = pulses[i].power
+        df0[f, "Pest"] = pulses[i].pulse(t, *pulses[i].popt)
+
+        df.iloc[i][0] = pulses[i].swh
+        df.iloc[i][1] = pulses[i].height
+        df.iloc[i][2] = pulses[i].varslopes
+
+    excel_name = "%s_%s.xlsx" % (config["Dataset"]["RetrackingFileName"], ptype)
+    df.to_excel(excel_name, sheet_name=ptype)
+
+    with pd.ExcelWriter(excel_name, mode='a', engine='openpyxl') as writer:  
+        df0.to_excel(writer, sheet_name='raw')
+
 class pulse(object):
     def __init__(self, config, **kwargs):
         # Скорость света/звука
         self.c = config['Constants']['WaveSpeed']
         self.tau = config["Radar"]["ImpulseDuration"]
         self.delta = np.deg2rad(config["Radar"]["GainWidth"])
+        self.type = type(self).__name__
 
         if 'file' in kwargs:
             df = pd.read_csv(kwargs['file'], sep="\s+", comment="#")
             self.time = df.iloc[:,0].values
             self.power = df.iloc[:,1].values
+            self.src = kwargs['file']
         elif 't' in kwargs and 'P' in kwargs:
             self.time = kwargs["t"]
             self.power = kwargs["P"]
+            self.src = ""
 
         self.curve_fit()
 
@@ -101,6 +131,9 @@ class brown(pulse):
     def varelev(self):
         return (self.swh/4)**2
 
+    @property
+    def varslopes(self):
+        return None
 
     def curve_fit(self, **kwargs):
 
@@ -137,7 +170,7 @@ class karaev(pulse):
 
     @property
     def height(self):
-        return self.popt[2]
+        return self.popt[2]/2
 
     @property
     def varelev(self):
@@ -187,8 +220,6 @@ class karaev(pulse):
                 erf( slopes_coeff*H*np.sqrt(2*varelev) - t*c/(2*np.sqrt(2*varelev)))
             )
         
-        # F2, F3 = 0, 0
-
         return sigma0/2 * (F1 + F2 + F3) + noise
 
 

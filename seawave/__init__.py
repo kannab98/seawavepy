@@ -4,6 +4,7 @@ import sys, os
 import toml
 from numpy import allclose
 
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -48,3 +49,8 @@ def exit_handler(srf):
     if config["Dataset"]["File"]:
         logger.info("Save file to %s" % os.path.join(os.getcwd(), config["Dataset"]["File"]))
         srf.to_netcdf(config['Dataset']['File'])
+
+
+
+
+from .spectrum import spectrum
