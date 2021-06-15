@@ -19,13 +19,15 @@ def get_files(file, **kwargs):
     path, file = os.path.split(file)
 
     path = os.path.abspath(path)
+
+    file = os.path.join(path, file)
     rx = re.compile(file)
 
 
     _files_ = []
     for root, dirs, files in os.walk(path, **kwargs):
         for file in files:
-            tmpfile = os.path.join(root,file)
+            tmpfile = os.path.join(root, file)
             _files_ += rx.findall(tmpfile)
     
     for file in _files_:
