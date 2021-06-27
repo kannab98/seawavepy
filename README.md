@@ -1,7 +1,7 @@
 
 [[1]](#1).
 
-<img src="https://render.githubusercontent.com/render/math?math=e^{i +\pi} =x+1">
+
 
 
 ## References
