@@ -59,7 +59,7 @@ class dispersion:
             k = np.roots(p)
             return 2*np.real(k[0])
         else:
-            func = lambda omega, omega0: dispersion.f(omega) - omega0
+            func = lambda omega, omega0: dispersion.f(omega) - omega0**2
             sol = optimize.fsolve(func, x0=0, args=(omega,))
             return sol
 
