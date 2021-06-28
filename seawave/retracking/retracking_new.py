@@ -8,63 +8,49 @@ from scipy.special import erf
 
 
 from  .. import config
+from . import get_files
 
 import logging
 logger = logging.getLogger(__name__)
 
-def get_files(file, **kwargs):
-    """
-    Рекурсивный поиск данных по регулярному выражению 
-    """
-    # file = file.replace('\\', os.path.sep)
-    # file = file.replace('/', os.path.sep)
-    path, file = os.path.split(file)
-
-    path = os.path.abspath(path)
-
-    file = os.path.join(path, file)
-    rx = re.compile(file)
-
-
-    _files_ = []
-    for root, dirs, files in os.walk(path, **kwargs):
-        for file in files:
-            tmpfile = os.path.join(root, file)
-            _files_ += rx.findall(tmpfile)
-    
-    for file in _files_:
-        logger.info("Found file: %s" % file)
-
-    return _files_
 
 def to_xlsx(pulses):
     files = []
     for i in range(len(pulses)):
         files.append(pulses[i].src)
     
-
-    columns = pd.MultiIndex.from_product([ files, ["t", "P", "Pest"] ])
-
+    index = range(len(files))
+    columns = pd.MultiIndex.from_product([ index, ["t", "P", "Pest"] ])
     df0 = pd.DataFrame(columns=columns)
-    df = pd.DataFrame(columns=["SWH", "H", "VarSlopes"], index=files)
-    for i, f in enumerate(files):
+    df = pd.DataFrame(columns=["SWH", "H", "VarSlopes"], index=index)
+    for i, f in enumerate(index):
+#        if (pulses[i].popt != None):
         t = pulses[i].time
         ptype = pulses[i].type
         df0[f, "t"] = t
         df0[f, "P"] = pulses[i].power
-        if (pulses[i].popt != None):
-            df0[f, "Pest"] = pulses[i].pulse(t, *pulses[i].popt)
+        df0[f, "Pest"] = pulses[i].pulse(t, *pulses[i].popt)
 
         df.iloc[i][0] = pulses[i].swh
         df.iloc[i][1] = pulses[i].height
         df.iloc[i][2] = pulses[i].varslopes
-
+#        else:
+#            t = None
+#            ptype = None
+#            df0[f, "t"] = None
+#            df0[f, "P"] = None
+#            df0[f, "Pest"] = None
+#            df.iloc[i][0] = None
+#            df.iloc[i][1] = None
+#            df.iloc[i][2] = None            
+            
     excel_name = "%s_%s.xlsx" % (config["Dataset"]["RetrackingFileName"], ptype)
     df.to_excel(excel_name, sheet_name=ptype)
 
     with pd.ExcelWriter(excel_name, mode='a', engine='openpyxl') as writer:  
         df0.to_excel(writer, sheet_name='raw')
-
+        df1 = pd.DataFrame({'files': files})
+        df1.to_excel(writer, sheet_name='files')
 class pulse(object):
     def __init__(self, config, **kwargs):
         # Скорость света/звука
@@ -74,16 +60,16 @@ class pulse(object):
         self.type = type(self).__name__
 
         if 'file' in kwargs:
-            try:
-                df = pd.read_csv(kwargs['file'], sep="\s+", comment="#")
-                self.time = df.iloc[:,0].values
-                self.power = df.iloc[:,1].values
-                self.curve_fit()
-            except:
-                self.time = None
-                self.power= None
-                self.popt = [None, None, None, None, None]
-                self.pcov = None
+            df = pd.read_csv(kwargs['file'], sep="\s+", comment="#")
+            
+            self.time = df.iloc[:,0].values
+            self.power = df.iloc[:,1].values
+            self.curve_fit()
+#            except:
+#                self.time = None
+#                self.power= None
+#                self.popt = [None, None, None, None, None]
+#                self.pcov = None
 
             self.src = kwargs['file']
         elif 't' in kwargs and 'P' in kwargs:
@@ -233,10 +219,6 @@ class karaev(pulse):
                 )
 
     def pulse(self, t, varelev, slopes_coeff, H, sigma0, noise):
-
-
-        if t == None:
-            return None
 
         c = self.c
         t_pulse = self.tau

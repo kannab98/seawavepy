@@ -36,6 +36,7 @@ AzimuthSize = 128
 # Безразмерный ветровой разгон
 NonDimWindFetch = 20170
 ThreadPerBlock = [8, 8, 8]
+CoastHeight = inf
 
 
 [Radar]

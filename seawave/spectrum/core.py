@@ -19,13 +19,20 @@ logger = logging.getLogger(__name__)
 
 class dispersion:
     # коэффициенты полинома при степенях k
-    p = [74e-6, 0, g, 0]
-    # f(k) -- полином вида:
-    # p[0]*k**3 + p[1]*k**2 + p[2]*k + p[3]
-    f = np.poly1d(p)
-    # df(k) -- полином вида:
-    # 3*p[0]*k**2 + 2*p[1]*k + p[2]
-    df = np.poly1d(np.polyder(p))
+    if config["Surface"]["CoastHeight"] == np.inf:
+        p = [74e-6, 0, g, 0]
+        # f(k) -- полином вида:
+        # p[0]*k**3 + p[1]*k**2 + p[2]*k + p[3]
+        f = np.poly1d(p)
+        # df(k) -- полином вида:
+        # 3*p[0]*k**2 + 2*p[1]*k + p[2]
+        df = np.poly1d(np.polyder(p))
+    else:
+        H = config["Surface"]["CoastHeight"]
+        f = lambda k: g*k*np.tanh(k*H)
+        df = lambda k: g*( np.tanh(k*H) + k*H * 1/np.sinh(k*H)**2)
+
+
 
     @staticmethod
     def omega(k):
@@ -45,10 +52,18 @@ class dispersion:
         Поиск корней полинома третьей степени. 
         Возвращает сумму двух комплексно сопряженных корней
         """
-        p = dispersion.p
-        p[-1] = omega**2
-        k = np.roots(p)
-        return 2*np.real(k[0])
+
+        if config["Surface"]["CoastHeight"] == np.inf:
+            p = dispersion.p
+            p[-1] = omega**2
+            k = np.roots(p)
+            return 2*np.real(k[0])
+        else:
+            func = lambda omega, omega0: dispersion.f(omega) - omega0
+            sol = optimize.fsolve(func, x0=0, args=(omega,))
+            return sol
+
+
 
     @staticmethod
     def det(k):
