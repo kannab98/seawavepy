@@ -36,6 +36,7 @@ AzimuthSize = 128
 # Безразмерный ветровой разгон
 NonDimWindFetch = 20170
 ThreadPerBlock = [8, 8, 8]
+CoastHeight = inf
 
 
 [Radar]
@@ -54,4 +55,4 @@ ImpulseDuration = 4e-5 # с
 [Dataset]
 Save = true
 File = "dataset.nc"
-RetrackingFileName = "impulses.xlsx"
+RetrackingFileName = "impulses"

@@ -2,8 +2,10 @@ from .. import config
 import numpy as np 
 
 g = config['Constants']['GravityAcceleration']
+
 class dispersion:
     # коэффициенты полинома при степенях k
+    print(config['Surface']["CoastHeight"])
     p = [74e-6, 0, g, 0]
     # f(k) -- полином вида:
     # p[0]*k**3 + p[1]*k**2 + p[2]*k + p[3]

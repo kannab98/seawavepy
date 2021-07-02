@@ -285,7 +285,8 @@ def init(srf: xr.Dataset, host_constants, dtype):
         s = srf.slopes.values
         v = srf.velocities.values
 
-        arr = np.zeros((7, *z.shape))
+
+        arr = np.zeros((6, *z.shape))
 
         x0 = cuda.to_device(x)
         y0 = cuda.to_device(y)
@@ -297,7 +298,7 @@ def init(srf: xr.Dataset, host_constants, dtype):
         srf.elevations.values = arr[0]
         srf.coords['Z'].values = arr[0]
         srf.velocities.values = arr[1:4]
-        srf.slopes.values = arr[4:]
+        srf.slopes.values[0:2] = arr[4:]
 
         # stream.synchronize()
     

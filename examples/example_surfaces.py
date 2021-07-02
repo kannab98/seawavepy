@@ -1,6 +1,3 @@
-import sys
-sys.path.append(".")
-
 import numpy as np
 from seawave import config
 from seawave.surface.core  import wind, surface
