@@ -22,7 +22,10 @@ def to_xlsx(files):
     
 
 
-    df0 = pd.DataFrame({'file': files, "varelev": np.zeros(len(files)), "varslopes": np.zeros(len(files)),})
+    df0 = pd.DataFrame({
+                            'file': files, "varelev": np.zeros(len(files)), 
+                            "varslopes": np.zeros(len(files)), 
+    })
     for i, f in enumerate(files):
         f = df[i].iloc[:, 0].values
         s = df[i].iloc[:, 1].values

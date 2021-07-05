@@ -37,6 +37,7 @@ AzimuthSize = 128
 NonDimWindFetch = 20170
 ThreadPerBlock = [8, 8, 8]
 CoastHeight = inf
+TwoScaledModel = true
 
 
 [Radar]
