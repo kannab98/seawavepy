@@ -2,6 +2,7 @@ from .. import config
 from scipy import optimize
 import numpy as np
 from . import integrate
+from functools import lru_cache
 
 class TwoScaledModel():
     def __init__(self) -> None:
@@ -50,8 +51,8 @@ class TwoScaledModel():
         return root
 
 
+    @lru_cache(maxsize=1024)
     def kEdges(self, band, ):
-
         """
         Границы различных электромагнитных диапазонов согласно спецификации IEEE
         

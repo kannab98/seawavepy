@@ -1,25 +1,46 @@
 from scipy import integrate
+from functools import lru_cache
 import numpy as np
 from . import dispersion
+from .decorators import dispatcher
+from typing import Any, Optional, Dict
 
 class Integrate():
     def __init__(self) -> None:
         pass
 
-    def quad(self, a,b, k0=None, k1=None,  speckwargs=dict(), **quadkwargs):
+
+    @dispatcher
+    @lru_cache()
+    def quad(self, a: int, b: int, 
+                   k0: Optional[float] = None, 
+                   k1: Optional[float] = None,
+                   speckwargs: Optional[Dict] = dict(), 
+                   **kwargs: Any):
+
         if k0==None:
             k0 = self.bounds[0]
 
         if k1==None:
             k1 = self.bounds[-1]
 
-        S = lambda k: self.__call__(k, **speckwargs) * k**a * dispersion.omega(k)**b
-        var = integrate.quad(S, k0, k1, **quadkwargs)[0]
+        S = lambda k: self.__call__(k, dispatcher=False, **speckwargs) * k**a * dispersion.omega(k)**b
+        var = integrate.quad(S, k0, k1, **kwargs)[0]
 
         return var
 
 
-    def dblquad(self, a, b, c, k0=None, k1=None, phi0=None, phi1=None,  speckwargs=dict(), **quadkwargs):
+
+
+    @dispatcher
+    @lru_cache()
+    def dblquad(self, a: int, b: int, c: int, d: int = 0, 
+                   k0: Optional[float] = None, 
+                   k1: Optional[float] = None,
+                   phi0: Optional[float] = None, 
+                   phi1: Optional[float] = None,
+                   speckwargs: Optional[Dict] = dict(), 
+                   **kwargs: Any):
         limit = np.array([self.KT[0], *self.bounds, self.KT[-1]])
 
         if k0==None:
@@ -35,11 +56,13 @@ class Integrate():
             phi1 = np.pi
         
 
-        S = lambda phi, k:  self.__call__(k, phi, **speckwargs) *  k**(a+b-c) * np.cos(phi)**a * np.sin(phi)**b
+        S = lambda phi, k:  self.__call__(k, phi, dispatcher=False, **speckwargs) *  \
+            k**(a+b-c) * np.cos(phi)**a * np.sin(phi)**b
+
         var = integrate.dblquad( S,
                 a=k0, b=k1,
                 gfun=lambda phi: phi0, 
-                hfun=lambda phi: phi1, **quadkwargs)
+                hfun=lambda phi: phi1, **kwargs)
         
         return var[0]
 

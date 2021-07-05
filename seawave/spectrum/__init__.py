@@ -1,32 +1,18 @@
 from .. import config
 
-def spectrum_dispatcher():
-    def decorator(func):
-        """
-        Декоратор обновляет необходимые переменные при изменении
-        разгона или скорости ветра
-        """
-        def wrapper(*args, dispatcher=True, tsm_dispatcher=True, **kwargs):
-            # self = spectrum
-            self = args[0]
-            if dispatcher:
-                x = config['Surface']['NonDimWindFetch']
-                U = config['Wind']['Speed']
-                waveLength = config['Radar']['WaveLength']
-
-                if self._x != x or self._U != U or self.peak == None or \
-                (self._wavelength != waveLength and tsm_dispatcher):
-                    self.peakUpdate(tsm_dispatcher)
-
-                self._x, self._U = x, U
-                self._wavelength = config["Radar"]["WaveLength"]
 
 
+__all__ = ["spectrum", "omega", "k"]
 
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
+__bibtex__ = r"""@article{ruabkova:2019,
+    author ={Ryabkova, M. and Karaev, V. and Guo, J. and Titchenko, Yu.},
+    title = {A Review of Wave Spectrum Models as Applied to the Problem of Radar Probing of the Sea Surface},
+    year = 2019,
+    journal = {Journal of Geophysical Research: Oceans},
+    pages = {7104--7134}
+}"""
 
+from .core import spectrum
+from .dispersion import *
 
-from . import core 
-spectrum = core.spectrum()
+spectrum = spectrum()
