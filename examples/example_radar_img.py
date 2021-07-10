@@ -8,10 +8,11 @@ from seawave.radar import radar
 from seawave.surface.core import stat
 import matplotlib.pyplot as plt
 
-r0 = [0, 0, 15]
+r0 = [0, 0, 1e6]
 
 config['Radar']['Position'] = r0
 config['Radar']['GainWidth'] = 30
+config['Radar']['Direction'] = np.deg2rad([0, 0])
 
 
 ds = xr.open_dataset('test-dataset.nc')
@@ -40,56 +41,57 @@ fac = np.sum(r*n, axis=0)
 # see [6] in Research of X-Band Radar Sea Clutter Image Simulation Method 
 fac[fac <= 0]  = 0
 # elevations of surface
-elev = ds['elevations']
+elev = ds['elevations'].values[0]
 # angle of departure
 aod = ds['AoD'][0]
-tilt_modulation = fac
+tilt_modulation = fac * elev
 
 """
 Shadow effect
 """
-N, M = elev.shape[1:]
-
 rho = np.sqrt(r[0]**2 + r[1]**2)
-rho = rho[0].flatten()
-chi = np.zeros(elev.size)
-for i in range(elev.size):
-    r0 = rho[i]
-    r = rho[rho < r0]
-    aodi = aod.values.flat[rho < r0]
-    aod0 = aod.values.flat[i]
-    try:
-        chi[i] = 1 + np.sign(
-            np.min(
-                np.heaviside(r0-r, 1) *
-                np.heaviside(r, 1) *
-                (aodi - aod0)
-            )
-        )
-    except:
-        chi[i] = 0
-chi = chi.reshape(elev.shape[1:])
-shadow_effect = chi
-# see [7] in Research of X-Band Radar Sea Clutter Image Simulation Method 
-# rho = np.sqrt(ds['X']**2  + ds['Y']**2)
-# alpha = np.arctan(rho/(r0[2] - elev))
-# That is R0?
-# Thai is Omega? 
-# I don't seem to know how to quickly build the shadow effect right now. I leave it to you
-# R0 = np.zeros_like(rho)
+rho = rho[0]
+chi = np.zeros(elev.shape)
+# def shadow():
+#     1 + np.sign( np.min(aodi - aod0))
+#     return
+
+def radar_ray(r, rho, z):
+    # Equation of a straight line from a surface point to a radar
+    return z + (r - rho) * (r0[2] - z)/rho
+
+
+
+# Azimuthal angle
+phi = np.rad2deg(np.arctan(r[1]/r[0]))
+phi = phi[0]
+
+shadow_effect = elev
+# Loop over all surface points
+for i in range(elev.shape[0]):
+    for j in range(elev.shape[1]):
+        phi0 = phi[i,j]
+        # Select points lying on a straight line 
+        # connecting the point of the surface and the radar
+        # The selection is carried out by azimuth angle and distance.
+        idx = (np.abs(phi0 - phi) < 1e-32) & (rho < rho[i,j])
+        ray = radar_ray(rho[idx], rho[i,j], elev[i,j])
+        # If any point of the radar line intersects the sea surface, a shadow effect appears.
+        if (ray < elev[idx]).any():
+            shadow_effect[i,j] = None
 
 X = ds['X'][0]
 Y = ds['Y'][0]
 
-fig, ax = plt.subplots()
-img = ax.contourf(X, Y, tilt_modulation[0], levels=100)
-bar = plt.colorbar(img)
-ax.set_xlabel("x")
-ax.set_ylabel("y")
-bar.set_label("tilt modulation")
-fig.savefig("examples/radar-img.png")
+# # fig, ax = plt.subplots()
+# # img = ax.contourf(X, Y, tilt_modulation[0], levels=100)
+# # bar = plt.colorbar(img)
+# # ax.set_xlabel("x")
+# # ax.set_ylabel("y")
+# # bar.set_label("tilt modulation")
+# # fig.savefig("examples/radar-img.png")
 
-ds.to_netcdf('test-dataset-radar.nc')
+# # ds.to_netcdf('test-dataset-radar.nc')
 
 
 
@@ -101,5 +103,5 @@ ax.set_ylabel("y")
 bar.set_label("shadow effectr")
 fig.savefig("examples/shadow-img.png")
 
-ds.to_netcdf('test-dataset-radar.nc')
+# # ds.to_netcdf('test-dataset-radar.nc')
 

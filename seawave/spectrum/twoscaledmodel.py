@@ -5,6 +5,9 @@ from . import integrate
 from functools import lru_cache
 
 class TwoScaledModel():
+    """
+    The parent class for the `spectrum`. Cannot be used separately
+    """
     def __init__(self) -> None:
         pass
 

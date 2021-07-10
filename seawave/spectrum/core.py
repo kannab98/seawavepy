@@ -50,22 +50,22 @@ class spectrum(Integrate, TwoScaledModel):
 
     Attributes
     ----------
-    peak
+    peak : float
         frequency of the spectral maximum in units [rad/m]
-    omega_m
+    omega_m : float
         frequency of the spectral maximum in units [Hz]
-    lambda_m
+    lambda_m : float
         frequency of the spectral maximum in units [m]
-    bounds
+    bounds : list
         simulated spectrum boundaries
 
 
     Methods
     -------
     __call__
-        Depending on the arguments, it returns
-            * One-dimensional spectrum
-            * Two-dimensional spectrum
+        Depending on the arguments, it returns:
+          - One-dimensional spectrum
+          - Two-dimensional spectrum
 
     JONSWAP
         The base of the Ryabkova's model

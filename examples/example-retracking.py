@@ -17,14 +17,14 @@ from seawave import config
 config["Radar"]["GainWidth"] = 15
 config["Radar"]["ImpulseDuration"] = 60e-6
 
-# files = rtr.get_files("tests/impulses/.*.txt")
+files = rtr.get_files("tests/impulses/.*NameOfFile1.txt")
 
-# pulses = []
-# for file in files:
-# 	pulses.append(rtr.karaev(file=file, config=config))
-# 	pulses.append(rtr.brown(file=file, config=config))
-# rtr.to_xlsx(pulses)
+pulses = []
+for file in files:
+	pulses.append(rtr.karaev(file=file, config=config))
+	pulses.append(rtr.brown(file=file, config=config))
+rtr.to_xlsx(pulses)
 
-files = rtr.get_files("tests/impulses/.*Spectrum.*.txt")
+files = rtr.get_files("tests/impulses/.*NameOfFile2.txt")
 specrtr.to_xlsx(files)
 print(files)

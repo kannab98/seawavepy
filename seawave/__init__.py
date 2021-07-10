@@ -53,4 +53,4 @@ def exit_handler(srf):
 
 
 
-from .spectrum import spectrum
+from .spectrum import *

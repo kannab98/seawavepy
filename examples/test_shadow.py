@@ -9,7 +9,7 @@ from seawave.radar import radar
 from seawave.surface.core import stat
 import matplotlib.pyplot as plt
 
-r0 = [0, 0, 10]
+r0 = [0, 0, 5]
 
 config['Radar']['Position'] = r0
 config['Radar']['GainWidth'] = 30
