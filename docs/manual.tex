@@ -1,0 +1,89 @@
+\include{preamble.tex}
+
+%\include{preamble/python.tex}
+
+\setcounter{secnumdepth}{0}
+\title{SeawavePy -- Sea Surface Simulation}
+\author{Ponur K.A.}
+%\date{}
+
+
+\newcommand{\python}{\textbf}
+\begin{document}
+\maketitle
+
+\section{Surface Module Description}
+Sea surface eleveations can be calculated as the sum of the harmonics with
+deterministic amplitudes and random phases
+\begin{gather}
+    \label{eq:surface2d}
+    \xi(\vec r,t) = \sum\limits_{n=1}^{N} \sum\limits_{m=1}^{M}
+    A_{n} \cdot
+    F_{nm} \cos \qty(\omega_n t + \vec \kappa_{nm} \vec r + \psi_{nm}), \\
+    A_n(\kappa_n) = \frac{1}{2 \pi} \sqrt{\int\limits_{\Delta \kappa_n} 
+        S_\xi(\kappa)
+    \dd \kappa}, \\
+    F_{nm}(\kappa_n,\phi_m) = \sqrt{\int\limits_{\Delta \phi_m}
+    \Phi_{\xi }(\kappa_n,\phi) \dd \phi},
+\end{gather}
+where $A_{nm}(\kappa)$ -- wave amplitude calculated from one-dimensional
+wave spectrum $S_\xi(\kappa)$,  $\vec r$ --
+radius measured from zero sea level,  $\psi$ -- random phases,  $\Phi$ -- azimuthal wave distribution.
+
+Knowing the elevations, we can calculate the slopes  of the surface
+
+
+\begin{equation}
+    \label{eq:slopes}
+    \begin{aligned}
+        \sigma_x(\vec r,t) & = \pdv{\xi}{x} \\
+        \sigma_y(\vec r,t) & = \pdv{\xi}{y} \\
+        \sigma_z(\vec r,t) & = \pdv{\xi}{z} =  1 
+    \end{aligned}
+\end{equation}
+The function \python{wind} in module \python{core.surface} calculates equations \eqref{eq:surface2d},
+\eqref{eq:slopes} on the GPU and returns an array of the NetCDF format
+with fields:
+\begin{itemize}
+    \item \python{elevations} -- elevations of surface with dimensions
+        $(x,y,t)$
+    \item \python{slopes} -- slopes of surface with dimensions
+        $(3, x,y,t)$
+    \item \python{velocities}
+    -- orbital velocities of surface with dimensions
+        $(3, x,y,t)$
+    \item \python{spectrum} -- Two dimensional wave spectrum
+\end{itemize}
+
+\section{Tilt-modulation}%
+\label{sec:tilt_modulation}
+
+
+The equation \eqref{eq:slopes} is the normal vector at a point on the surface
+\begin{equation}
+    \label{eq:}
+    \vec n = \frac{\vec i \cdot \sigma_x+ \vec j \sigma_y + \vec k \cdot 1 }{\sqrt{\sigma_x^2 +
+    \sigma_y^2 + 1}}
+\end{equation}
+\begin{equation}
+    \label{eq:}
+    \vec u = (x,y,\xi)
+\end{equation}
+
+Then we can calculate tilt-modulation effect 
+\begin{equation}
+    \label{eq:}
+    \sigma_{tilt}(x,y,t) = \begin{cases}
+        \vec n \vec u, &\text{ if } \vec n \vec u > 0\ \\ 
+        0,  & \text{ if } \vec n \vec u \leq 0
+        
+    \end{cases} 
+\end{equation}
+
+These equations are a complete replacement for equations (3-6) from the article
+"Research of X-band Radar Sea Clutter Image Simulation Model"
+
+
+\end{document}
+
+
