@@ -1,5 +1,10 @@
+# Model of the spectrum of of surface waves
 
-[[1]](#1).
+## Installation 
+The installation itself is done by the pip package manager (required git installed):
+`pip install git+https://github.com/kannab98/seawave-spectrum.git`.
+
+
 
 
 
